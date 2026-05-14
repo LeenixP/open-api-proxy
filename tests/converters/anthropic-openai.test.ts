@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import type { StreamContext } from '../../src/types.js';
 import {
   AnthropicToOpenAIChatConverter,
   OpenAIChatToAnthropicConverter,
-  resetAnthropicToOpenAIStreamState,
-  resetOpenAIToAnthropicStreamState,
+  createAnthropicToOpenAIStreamContext,
+  createOpenAIToAnthropicStreamContext,
 } from '../../src/converters/anthropic-openai.js';
 
 // ============================================================================
@@ -523,13 +524,16 @@ describe('AnthropicToOpenAIChatConverter', () => {
   });
 
   describe('convertStreamChunk', () => {
+    let ctx: StreamContext;
+
     beforeEach(() => {
-      resetAnthropicToOpenAIStreamState();
+      ctx = createAnthropicToOpenAIStreamContext();
     });
 
     it('should handle content delta -> text_delta', () => {
       const result = converter.convertStreamChunk(
         'data: {"id":"chatcmpl-001","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}',
+        ctx,
       );
       expect(result).toBeTruthy();
       // First chunk should include message_start + content_block_start + content_block_delta
@@ -544,10 +548,12 @@ describe('AnthropicToOpenAIChatConverter', () => {
       // First chunk
       converter.convertStreamChunk(
         'data: {"id":"chatcmpl-001","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}',
+        ctx,
       );
       // Second chunk - should only have content_block_delta
       const result = converter.convertStreamChunk(
         'data: {"id":"chatcmpl-001","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":" world"},"finish_reason":null}]}',
+        ctx,
       );
       expect(result).toBeTruthy();
       expect(result).not.toContain('event: message_start');
@@ -559,6 +565,7 @@ describe('AnthropicToOpenAIChatConverter', () => {
     it('should handle tool_call delta -> input_json_delta', () => {
       const result = converter.convertStreamChunk(
         'data: {"id":"chatcmpl-002","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_xyz","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}',
+        ctx,
       );
       expect(result).toBeTruthy();
       expect(result).toContain('event: message_start');
@@ -572,10 +579,12 @@ describe('AnthropicToOpenAIChatConverter', () => {
       // First: tool call start
       converter.convertStreamChunk(
         'data: {"id":"chatcmpl-002","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_xyz","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}',
+        ctx,
       );
       // Second: arguments
       const result = converter.convertStreamChunk(
         'data: {"id":"chatcmpl-002","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"location\\":\\"SF\\"}"}}]},"finish_reason":null}]}',
+        ctx,
       );
       expect(result).toBeTruthy();
       expect(result).toContain('event: content_block_delta');
@@ -587,10 +596,12 @@ describe('AnthropicToOpenAIChatConverter', () => {
       // First: send some content
       converter.convertStreamChunk(
         'data: {"id":"chatcmpl-003","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}',
+        ctx,
       );
       // Finish
       const result = converter.convertStreamChunk(
         'data: {"id":"chatcmpl-003","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}',
+        ctx,
       );
       expect(result).toBeTruthy();
       expect(result).toContain('event: content_block_stop');
@@ -603,26 +614,28 @@ describe('AnthropicToOpenAIChatConverter', () => {
       // Setup state via a stream
       converter.convertStreamChunk(
         'data: {"id":"chatcmpl-004","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Test"},"finish_reason":null}]}',
+        ctx,
       );
-      const result = converter.convertStreamChunk('data: [DONE]');
+      const result = converter.convertStreamChunk('data: [DONE]', ctx);
       expect(result).toBeTruthy();
       expect(result).toContain('event: message_stop');
       expect(result).toContain('"type":"message_stop"');
     });
 
     it('should return null for empty delta', () => {
-      const result = converter.convertStreamChunk('');
+      const result = converter.convertStreamChunk('', ctx);
       expect(result).toBeNull();
     });
 
     it('should return null for non-SSE content', () => {
-      const result = converter.convertStreamChunk('garbage');
+      const result = converter.convertStreamChunk('garbage', ctx);
       expect(result).toBeNull();
     });
 
     it('should return null for chunk with empty choices', () => {
       const result = converter.convertStreamChunk(
         'data: {"id":"chatcmpl-005","object":"chat.completion.chunk","choices":[]}',
+        ctx,
       );
       expect(result).toBeNull();
     });
@@ -631,10 +644,12 @@ describe('AnthropicToOpenAIChatConverter', () => {
       // Start with text
       converter.convertStreamChunk(
         'data: {"id":"chatcmpl-006","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Let me check."},"finish_reason":null}]}',
+        ctx,
       );
       // Switch to tool_call
       const result = converter.convertStreamChunk(
         'data: {"id":"chatcmpl-006","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_sw","type":"function","function":{"name":"search","arguments":"query"}}]},"finish_reason":null}]}',
+        ctx,
       );
       expect(result).toBeTruthy();
       // Text block should be stopped before tool_use starts
@@ -1156,13 +1171,16 @@ describe('OpenAIChatToAnthropicConverter', () => {
   });
 
   describe('convertStreamChunk', () => {
+    let ctx: StreamContext;
+
     beforeEach(() => {
-      resetOpenAIToAnthropicStreamState();
+      ctx = createOpenAIToAnthropicStreamContext();
     });
 
     it('should convert message_start -> role delta', () => {
       const result = converter.convertStreamChunk(
         'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_001","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"usage":{"input_tokens":10}}}',
+        ctx,
       );
       expect(result).toBeTruthy();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
@@ -1175,9 +1193,11 @@ describe('OpenAIChatToAnthropicConverter', () => {
       // First need message_start for state
       converter.convertStreamChunk(
         'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_002","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[]}}',
+        ctx,
       );
       const result = converter.convertStreamChunk(
         'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
+        ctx,
       );
       expect(result).toBeTruthy();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
@@ -1187,9 +1207,11 @@ describe('OpenAIChatToAnthropicConverter', () => {
     it('should convert content_block_start (tool_use) -> tool_call delta', () => {
       converter.convertStreamChunk(
         'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_003","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[]}}',
+        ctx,
       );
       const result = converter.convertStreamChunk(
         'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_001","name":"get_weather","input":{}}}',
+        ctx,
       );
       expect(result).toBeTruthy();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
@@ -1202,12 +1224,15 @@ describe('OpenAIChatToAnthropicConverter', () => {
     it('should convert text_delta -> content delta', () => {
       converter.convertStreamChunk(
         'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_004","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[]}}',
+        ctx,
       );
       converter.convertStreamChunk(
         'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
+        ctx,
       );
       const result = converter.convertStreamChunk(
         'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}',
+        ctx,
       );
       expect(result).toBeTruthy();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
@@ -1217,12 +1242,15 @@ describe('OpenAIChatToAnthropicConverter', () => {
     it('should convert input_json_delta -> tool_call arguments delta', () => {
       converter.convertStreamChunk(
         'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_005","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[]}}',
+        ctx,
       );
       converter.convertStreamChunk(
         'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_002","name":"search","input":{}}}',
+        ctx,
       );
       const result = converter.convertStreamChunk(
         'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"query\\":\\"weather\\"}"}}',
+        ctx,
       );
       expect(result).toBeTruthy();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
@@ -1233,18 +1261,23 @@ describe('OpenAIChatToAnthropicConverter', () => {
     it('should convert message_delta -> finish_reason + usage', () => {
       converter.convertStreamChunk(
         'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_006","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"usage":{"input_tokens":10}}}',
+        ctx,
       );
       converter.convertStreamChunk(
         'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
+        ctx,
       );
       converter.convertStreamChunk(
         'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"}}',
+        ctx,
       );
       converter.convertStreamChunk(
         'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}',
+        ctx,
       );
       const result = converter.convertStreamChunk(
         'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":5}}',
+        ctx,
       );
       expect(result).toBeTruthy();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
@@ -1255,21 +1288,27 @@ describe('OpenAIChatToAnthropicConverter', () => {
     it('should convert message_stop -> [DONE]', () => {
       converter.convertStreamChunk(
         'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_007","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[]}}',
+        ctx,
       );
       converter.convertStreamChunk(
         'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
+        ctx,
       );
       converter.convertStreamChunk(
         'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Done"}}',
+        ctx,
       );
       converter.convertStreamChunk(
         'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}',
+        ctx,
       );
       converter.convertStreamChunk(
         'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":2}}',
+        ctx,
       );
       const result = converter.convertStreamChunk(
         'event: message_stop\ndata: {"type":"message_stop"}',
+        ctx,
       );
       expect(result).toBe('data: [DONE]\n\n');
     });
@@ -1277,6 +1316,7 @@ describe('OpenAIChatToAnthropicConverter', () => {
     it('should convert error event', () => {
       const result = converter.convertStreamChunk(
         'event: error\ndata: {"type":"error","error":{"type":"overloaded_error","message":"Server overloaded"}}',
+        ctx,
       );
       expect(result).toBeTruthy();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
@@ -1286,21 +1326,24 @@ describe('OpenAIChatToAnthropicConverter', () => {
     it('should return null for content_block_stop when no state needed', () => {
       converter.convertStreamChunk(
         'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_008","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[]}}',
+        ctx,
       );
       const result = converter.convertStreamChunk(
         'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}',
+        ctx,
       );
       expect(result).toBeNull();
     });
 
     it('should return null for empty chunk', () => {
-      const result = converter.convertStreamChunk('');
+      const result = converter.convertStreamChunk('', ctx);
       expect(result).toBeNull();
     });
 
     it('should return null for ping event', () => {
       const result = converter.convertStreamChunk(
         'event: ping\ndata: {}',
+        ctx,
       );
       expect(result).toBeNull();
     });

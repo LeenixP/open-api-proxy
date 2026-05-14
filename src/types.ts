@@ -8,6 +8,15 @@ export interface ProviderConfig {
   models: string[];
 }
 
+export interface ProviderPreset {
+  display_name: string;
+  base_url: string;
+  api_key: string;
+  protocol: ProviderProtocol;
+  models: string[];
+  website?: string;
+}
+
 export interface ServerConfig {
   port: number;
   host: string;
@@ -49,7 +58,7 @@ export interface RouteInfo {
   providerKey: string;
   provider: ProviderConfig;
   model: string;
-  sourceProtocol: 'openai-chat' | 'anthropic' | 'openai-responses';
+  sourceProtocol: 'openai' | 'anthropic' | 'openai-responses';
   targetProtocol: ProviderProtocol;
   stream: boolean;
 }
@@ -62,6 +71,10 @@ export interface ConvertedRequest {
 
 export interface StreamContext {
   state: Record<string, unknown>;
+  // Per-request stream state is stored via index signature.
+  // Converters should use typed access patterns like:
+  //   ctx.state as MyStreamState
+  //   ctx as unknown as { myField: string }
   [key: string]: unknown;
 }
 

@@ -1,4 +1,4 @@
-import type { Converter } from '../types.js';
+import type { Converter, StreamContext } from '../types.js';
 import { createConverter } from './base.js';
 import { formatSSE, safeJsonParse } from './helpers.js';
 
@@ -240,15 +240,8 @@ function createAnthropicStreamState(): AnthropicStreamState {
   };
 }
 
-let as2oState = createAnthropicStreamState();
-
-function resetA2OState(): void {
-  as2oState = createAnthropicStreamState();
-}
-
-// Exported for test isolation
-export function resetAnthropicToOpenAIStreamState(): void {
-  resetA2OState();
+export function createAnthropicToOpenAIStreamContext(): StreamContext {
+  return { state: createAnthropicStreamState() as unknown as Record<string, unknown> };
 }
 
 function convertAnthropicRequestToOpenAI(body: Record<string, unknown>, targetModel: string): Record<string, unknown> {
@@ -445,17 +438,19 @@ function convertOpenAIResponseToAnthropic(body: Record<string, unknown>): Record
   };
 }
 
-function convertOpenAIStreamChunkToAnthropic(chunk: string): string | null {
+function convertOpenAIStreamChunkToAnthropic(chunk: string, ctx: StreamContext): string | null {
+  const state = ctx.state as unknown as AnthropicStreamState;
+
   const trimmed = chunk.trim();
   if (!trimmed) return null;
 
   const isDone = trimmed === 'data: [DONE]';
   if (isDone) {
     const events: string[] = [];
-    if (as2oState.currentBlockType) {
+    if (state.currentBlockType) {
       events.push(formatSSE('content_block_stop', JSON.stringify({
         type: 'content_block_stop',
-        index: as2oState.currentBlockIndex,
+        index: state.currentBlockIndex,
       })));
     }
     events.push(formatSSE('message_delta', JSON.stringify({
@@ -464,7 +459,7 @@ function convertOpenAIStreamChunkToAnthropic(chunk: string): string | null {
       usage: { output_tokens: 0 },
     })));
     events.push(formatSSE('message_stop', JSON.stringify({ type: 'message_stop' })));
-    resetA2OState();
+    Object.assign(ctx.state, createAnthropicStreamState());
     return events.join('');
   }
 
@@ -484,9 +479,9 @@ function convertOpenAIStreamChunkToAnthropic(chunk: string): string | null {
   const finishReason = choices[0].finish_reason as string | undefined;
   const usage = obj.usage as Record<string, number> | undefined;
 
-  if (!as2oState.initialized) {
-    as2oState.messageId = (obj.id as string) || 'msg_unknown';
-    as2oState.model = (obj.model as string) || 'unknown';
+  if (!state.initialized) {
+    state.messageId = (obj.id as string) || 'msg_unknown';
+    state.model = (obj.model as string) || 'unknown';
   }
 
   const events: string[] = [];
@@ -494,41 +489,41 @@ function convertOpenAIStreamChunkToAnthropic(chunk: string): string | null {
   // Handle content delta
   if (delta?.content !== undefined && delta.content !== null) {
     const text = delta.content as string;
-    if (!as2oState.initialized) {
+    if (!state.initialized) {
       events.push(formatSSE('message_start', JSON.stringify({
         type: 'message_start',
         message: {
-          id: as2oState.messageId,
+          id: state.messageId,
           type: 'message',
           role: 'assistant',
-          model: as2oState.model,
+          model: state.model,
           content: [],
         },
       })));
-      as2oState.initialized = true;
+      state.initialized = true;
     }
 
-    if (as2oState.currentBlockType !== 'text') {
+    if (state.currentBlockType !== 'text') {
       // Close previous block if any
-      if (as2oState.currentBlockType) {
+      if (state.currentBlockType) {
         events.push(formatSSE('content_block_stop', JSON.stringify({
           type: 'content_block_stop',
-          index: as2oState.currentBlockIndex,
+          index: state.currentBlockIndex,
         })));
       }
       // Start new text block
-      as2oState.currentBlockIndex++;
-      as2oState.currentBlockType = 'text';
+      state.currentBlockIndex++;
+      state.currentBlockType = 'text';
       events.push(formatSSE('content_block_start', JSON.stringify({
         type: 'content_block_start',
-        index: as2oState.currentBlockIndex,
+        index: state.currentBlockIndex,
         content_block: { type: 'text', text: '' },
       })));
     }
 
     events.push(formatSSE('content_block_delta', JSON.stringify({
       type: 'content_block_delta',
-      index: as2oState.currentBlockIndex,
+      index: state.currentBlockIndex,
       delta: { type: 'text_delta', text },
     })));
   }
@@ -536,40 +531,40 @@ function convertOpenAIStreamChunkToAnthropic(chunk: string): string | null {
   // Handle tool_calls delta
   if (delta?.tool_calls) {
     const toolCalls = delta.tool_calls as Array<Record<string, unknown>>;
-    if (!as2oState.initialized) {
+    if (!state.initialized) {
       events.push(formatSSE('message_start', JSON.stringify({
         type: 'message_start',
         message: {
-          id: as2oState.messageId,
+          id: state.messageId,
           type: 'message',
           role: 'assistant',
-          model: as2oState.model,
+          model: state.model,
           content: [],
         },
       })));
-      as2oState.initialized = true;
+      state.initialized = true;
     }
 
     for (const tc of toolCalls) {
       const idx = tc.index as number;
 
-      if (!as2oState.toolCallInfo.has(idx)) {
+      if (!state.toolCallInfo.has(idx)) {
         // New tool call
-        if (as2oState.currentBlockType) {
+        if (state.currentBlockType) {
           events.push(formatSSE('content_block_stop', JSON.stringify({
             type: 'content_block_stop',
-            index: as2oState.currentBlockIndex,
+            index: state.currentBlockIndex,
           })));
         }
-        as2oState.currentBlockIndex++;
-        as2oState.currentBlockType = 'tool_use';
+        state.currentBlockIndex++;
+        state.currentBlockType = 'tool_use';
         const tcId = (tc.id as string) || '';
         const tcName = (tc.function as Record<string, unknown>)?.name as string || '';
-        as2oState.toolCallInfo.set(idx, { id: tcId, name: tcName });
+        state.toolCallInfo.set(idx, { id: tcId, name: tcName });
 
         events.push(formatSSE('content_block_start', JSON.stringify({
           type: 'content_block_start',
-          index: as2oState.currentBlockIndex,
+          index: state.currentBlockIndex,
           content_block: { type: 'tool_use', id: tcId, name: tcName, input: {} },
         })));
       }
@@ -578,7 +573,7 @@ function convertOpenAIStreamChunkToAnthropic(chunk: string): string | null {
       if (func?.arguments) {
         events.push(formatSSE('content_block_delta', JSON.stringify({
           type: 'content_block_delta',
-          index: as2oState.currentBlockIndex,
+          index: state.currentBlockIndex,
           delta: { type: 'input_json_delta', partial_json: func.arguments },
         })));
       }
@@ -587,10 +582,10 @@ function convertOpenAIStreamChunkToAnthropic(chunk: string): string | null {
 
   // Handle finish_reason
   if (finishReason) {
-    if (as2oState.currentBlockType) {
+    if (state.currentBlockType) {
       events.push(formatSSE('content_block_stop', JSON.stringify({
         type: 'content_block_stop',
-        index: as2oState.currentBlockIndex,
+        index: state.currentBlockIndex,
       })));
     }
     events.push(formatSSE('message_delta', JSON.stringify({
@@ -604,7 +599,7 @@ function convertOpenAIStreamChunkToAnthropic(chunk: string): string | null {
       },
     })));
     events.push(formatSSE('message_stop', JSON.stringify({ type: 'message_stop' })));
-    resetA2OState();
+    Object.assign(ctx.state, createAnthropicStreamState());
   }
 
   return events.length > 0 ? events.join('') : null;
@@ -638,15 +633,8 @@ function createOpenAI2StreamState(): OpenAI2StreamState {
   };
 }
 
-let oa2sState = createOpenAI2StreamState();
-
-function resetOA2SState(): void {
-  oa2sState = createOpenAI2StreamState();
-}
-
-// Exported for test isolation
-export function resetOpenAIToAnthropicStreamState(): void {
-  resetOA2SState();
+export function createOpenAIToAnthropicStreamContext(): StreamContext {
+  return { state: createOpenAI2StreamState() as unknown as Record<string, unknown> };
 }
 
 function convertOpenAIRequestToAnthropic(body: Record<string, unknown>, targetModel: string): Record<string, unknown> {
@@ -850,7 +838,9 @@ function convertAnthropicResponseToOpenAI(body: Record<string, unknown>): Record
   };
 }
 
-function convertAnthropicStreamChunkToOpenAI(chunk: string): string | null {
+function convertAnthropicStreamChunkToOpenAI(chunk: string, ctx: StreamContext): string | null {
+  const state = ctx.state as unknown as OpenAI2StreamState;
+
   const trimmed = chunk.trim();
   if (!trimmed) return null;
 
@@ -882,16 +872,16 @@ function convertAnthropicStreamChunkToOpenAI(chunk: string): string | null {
 
   if (type === 'message_start') {
     const msg = data.message as Record<string, unknown>;
-    oa2sState.initialized = true;
-    oa2sState.messageId = (msg.id as string) || 'chatcmpl-unknown';
-    oa2sState.model = (msg.model as string) || 'unknown';
-    oa2sState.usagePromptTokens = ((msg.usage as Record<string, number>)?.input_tokens) || 0;
+    state.initialized = true;
+    state.messageId = (msg.id as string) || 'chatcmpl-unknown';
+    state.model = (msg.model as string) || 'unknown';
+    state.usagePromptTokens = ((msg.usage as Record<string, number>)?.input_tokens) || 0;
 
     return formatSSE('', JSON.stringify({
-      id: oa2sState.messageId,
+      id: state.messageId,
       object: 'chat.completion.chunk',
       created: Math.floor(Date.now() / 1000),
-      model: oa2sState.model,
+      model: state.model,
       choices: [{ index: 0, delta: { role: 'assistant', content: '' }, finish_reason: null }],
     }));
   }
@@ -903,30 +893,30 @@ function convertAnthropicStreamChunkToOpenAI(chunk: string): string | null {
 
     if (blockType === 'text') {
       return formatSSE('', JSON.stringify({
-        id: oa2sState.messageId,
+        id: state.messageId,
         object: 'chat.completion.chunk',
         created: Math.floor(Date.now() / 1000),
-        model: oa2sState.model,
+        model: state.model,
         choices: [{ index: 0, delta: { content: '' }, finish_reason: null }],
       }));
     } else if (blockType === 'tool_use') {
-      oa2sState.currentToolCallId = (contentBlock.id as string) || '';
-      oa2sState.currentToolCallName = (contentBlock.name as string) || '';
-      oa2sState.currentToolCallIndex = index;
+      state.currentToolCallId = (contentBlock.id as string) || '';
+      state.currentToolCallName = (contentBlock.name as string) || '';
+      state.currentToolCallIndex = index;
 
       return formatSSE('', JSON.stringify({
-        id: oa2sState.messageId,
+        id: state.messageId,
         object: 'chat.completion.chunk',
         created: Math.floor(Date.now() / 1000),
-        model: oa2sState.model,
+        model: state.model,
         choices: [{
           index: 0,
           delta: {
             tool_calls: [{
               index,
-              id: oa2sState.currentToolCallId,
+              id: state.currentToolCallId,
               type: 'function',
-              function: { name: oa2sState.currentToolCallName, arguments: '' },
+              function: { name: state.currentToolCallName, arguments: '' },
             }],
           },
           finish_reason: null,
@@ -942,18 +932,18 @@ function convertAnthropicStreamChunkToOpenAI(chunk: string): string | null {
 
     if (deltaType === 'text_delta') {
       return formatSSE('', JSON.stringify({
-        id: oa2sState.messageId,
+        id: state.messageId,
         object: 'chat.completion.chunk',
         created: Math.floor(Date.now() / 1000),
-        model: oa2sState.model,
+        model: state.model,
         choices: [{ index: 0, delta: { content: delta.text as string }, finish_reason: null }],
       }));
     } else if (deltaType === 'input_json_delta') {
       return formatSSE('', JSON.stringify({
-        id: oa2sState.messageId,
+        id: state.messageId,
         object: 'chat.completion.chunk',
         created: Math.floor(Date.now() / 1000),
-        model: oa2sState.model,
+        model: state.model,
         choices: [{
           index: 0,
           delta: {
@@ -975,30 +965,30 @@ function convertAnthropicStreamChunkToOpenAI(chunk: string): string | null {
   if (type === 'message_delta') {
     const delta = data.delta as Record<string, unknown>;
     const usage = data.usage as Record<string, number>;
-    oa2sState.usageCompletionTokens = usage?.output_tokens || 0;
+    state.usageCompletionTokens = usage?.output_tokens || 0;
 
     const stopReason = delta.stop_reason as string || 'end_turn';
 
     return formatSSE('', JSON.stringify({
-      id: oa2sState.messageId,
+      id: state.messageId,
       object: 'chat.completion.chunk',
       created: Math.floor(Date.now() / 1000),
-      model: oa2sState.model,
+      model: state.model,
       choices: [{
         index: 0,
         delta: {},
         finish_reason: stopReasonToFinishReason(stopReason),
       }],
       usage: usage ? {
-        prompt_tokens: oa2sState.usagePromptTokens,
+        prompt_tokens: state.usagePromptTokens,
         completion_tokens: usage.output_tokens,
-        total_tokens: oa2sState.usagePromptTokens + usage.output_tokens,
+        total_tokens: state.usagePromptTokens + usage.output_tokens,
       } : undefined,
     }));
   }
 
   if (type === 'message_stop') {
-    resetOA2SState();
+    Object.assign(ctx.state, createOpenAI2StreamState());
     return 'data: [DONE]\n\n';
   }
 
@@ -1025,12 +1015,16 @@ export const AnthropicToOpenAIChatConverter: Converter = createConverter(
       return convertOpenAIResponseToAnthropic(body);
     },
 
-    convertStreamChunk(chunk: string): string | null {
-      return convertOpenAIStreamChunkToAnthropic(chunk);
+    convertStreamChunk(chunk: string, ctx: StreamContext): string | null {
+      return convertOpenAIStreamChunkToAnthropic(chunk, ctx);
     },
 
     convertError(status: number, body: string): { status: number; body: string } {
       return { status, body: convertAnthropicErrorToOpenAI(body) };
+    },
+
+    createStreamContext(): StreamContext {
+      return createAnthropicToOpenAIStreamContext();
     },
   },
 );
@@ -1047,12 +1041,16 @@ export const OpenAIChatToAnthropicConverter: Converter = createConverter(
       return convertAnthropicResponseToOpenAI(body);
     },
 
-    convertStreamChunk(chunk: string): string | null {
-      return convertAnthropicStreamChunkToOpenAI(chunk);
+    convertStreamChunk(chunk: string, ctx: StreamContext): string | null {
+      return convertAnthropicStreamChunkToOpenAI(chunk, ctx);
     },
 
     convertError(status: number, body: string): { status: number; body: string } {
       return { status, body: convertOpenAIErrorToAnthropic(body) };
+    },
+
+    createStreamContext(): StreamContext {
+      return createOpenAIToAnthropicStreamContext();
     },
   },
 );

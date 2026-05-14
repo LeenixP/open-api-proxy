@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../api/client';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, Copy, Trash2 } from 'lucide-react';
 
 export default function Playground() {
   const [endpoint, setEndpoint] = useState('/v1/chat/completions');
@@ -12,6 +12,7 @@ export default function Playground() {
   const [maxTokens, setMaxTokens] = useState(4096);
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const responseRef = useRef<HTMLPreElement>(null);
 
@@ -98,7 +99,7 @@ export default function Playground() {
   return (
     <div>
       <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">API 测试</h2>
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">端点</label>
@@ -148,8 +149,45 @@ export default function Playground() {
             {loading ? '请求中...' : '发送'}
           </button>
         </div>
-        <div className="bg-gray-900 rounded-xl p-4 overflow-auto max-h-[600px]">
-          <pre ref={responseRef} className="text-green-400 text-sm whitespace-pre-wrap font-mono">{response || '响应将显示在这里...'}</pre>
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden flex flex-col max-h-[600px]">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">响应</span>
+              {loading && stream && (
+                <span className="flex items-center gap-1 text-xs text-indigo-500">
+                  <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+                  流式输出中...
+                </span>
+              )}
+              {loading && !stream && (
+                <span className="flex items-center gap-1 text-xs text-indigo-500">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  请求中...
+                </span>
+              )}
+            </div>
+            <div className="flex gap-1">
+              <button
+                onClick={() => { navigator.clipboard.writeText(response); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                disabled={!response}
+                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-30 rounded"
+                aria-label="复制响应"
+              >
+                {copied ? <span className="text-xs text-green-500">已复制</span> : <Copy className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={() => setResponse('')}
+                disabled={!response}
+                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-30 rounded"
+                aria-label="清空响应"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div className="p-4 overflow-auto flex-1">
+            <pre ref={responseRef} className="text-gray-700 dark:text-green-400 text-sm whitespace-pre-wrap font-mono">{response || '响应将显示在这里...'}</pre>
+          </div>
         </div>
       </div>
     </div>

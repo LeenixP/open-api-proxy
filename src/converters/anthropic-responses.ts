@@ -1,4 +1,4 @@
-import type { Converter } from '../types.js';
+import type { Converter, StreamContext } from '../types.js';
 import { parseSSELine, parseSSEChunk, formatSSE, isDoneChunk, safeJsonParse } from './helpers.js';
 
 // ──────────────────────────────────────
@@ -63,12 +63,16 @@ class AnthropicToResponsesConverter implements Converter {
   readonly fromProtocol = 'anthropic';
   readonly toProtocol = 'openai-responses';
 
-  // Stream conversion state
-  private streamResponseId = '';
-  private streamItemId = '';
-  private streamOutputIndex = 0;
-  private streamModel = '';
-  private streamAccumContent: unknown[] = [];
+  createStreamContext(): StreamContext {
+    return {
+      state: {},
+      responseId: '',
+      itemId: '',
+      outputIndex: 0,
+      model: '',
+      accumContent: [] as unknown[],
+    };
+  }
 
   convertRequest(body: Record<string, unknown>, targetModel: string): Record<string, unknown> {
     const result: Record<string, unknown> = { model: targetModel };
@@ -161,7 +165,7 @@ class AnthropicToResponsesConverter implements Converter {
     return result;
   }
 
-  convertStreamChunk(chunk: string): string | null {
+  convertStreamChunk(chunk: string, ctx: StreamContext): string | null {
     if (isDoneChunk(chunk)) return 'data: [DONE]\n\n';
 
     const parsed = parseSSEChunk(chunk);
@@ -174,15 +178,15 @@ class AnthropicToResponsesConverter implements Converter {
 
     switch (type) {
       case 'message_start':
-        return this.onMessageStart(event);
+        return this.onMessageStart(event, ctx);
       case 'content_block_start':
-        return this.onContentBlockStart(event);
+        return this.onContentBlockStart(event, ctx);
       case 'content_block_delta':
-        return this.onContentBlockDelta(event);
+        return this.onContentBlockDelta(event, ctx);
       case 'content_block_stop':
         return chunk; // forward as-is
       case 'message_delta':
-        return this.onMessageDelta(event);
+        return this.onMessageDelta(event, ctx);
       case 'message_stop':
         return 'data: [DONE]\n\n';
       case 'error':
@@ -403,20 +407,20 @@ class AnthropicToResponsesConverter implements Converter {
 
   // ── stream event handlers ──
 
-  private onMessageStart(event: Record<string, unknown>): string {
+  private onMessageStart(event: Record<string, unknown>, ctx: StreamContext): string {
     const msg = event.message as Record<string, unknown>;
-    this.streamResponseId = `resp_${msg.id || Date.now()}`;
-    this.streamItemId = `msg_${msg.id || Date.now()}`;
-    this.streamOutputIndex = 0;
-    this.streamModel = (msg.model as string) || '';
-    this.streamAccumContent = [];
+    ctx.responseId = `resp_${msg.id || Date.now()}`;
+    ctx.itemId = `msg_${msg.id || Date.now()}`;
+    ctx.outputIndex = 0;
+    ctx.model = (msg.model as string) || '';
+    ctx.accumContent = [] as unknown[];
 
     const created = {
       type: 'response.created',
       response: {
-        id: this.streamResponseId,
+        id: ctx.responseId,
         object: 'response',
-        model: this.streamModel,
+        model: ctx.model,
         status: 'in_progress',
         output: [],
         usage: msg.usage || null,
@@ -425,10 +429,10 @@ class AnthropicToResponsesConverter implements Converter {
 
     const itemAdded = {
       type: 'response.output_item.added',
-      output_index: this.streamOutputIndex,
+      output_index: ctx.outputIndex,
       item: {
         type: 'message',
-        id: this.streamItemId,
+        id: ctx.itemId,
         status: 'in_progress',
         role: 'assistant',
         content: [],
@@ -441,7 +445,7 @@ class AnthropicToResponsesConverter implements Converter {
     );
   }
 
-  private onContentBlockStart(event: Record<string, unknown>): string | null {
+  private onContentBlockStart(event: Record<string, unknown>, ctx: StreamContext): string | null {
     const block = event.content_block as Record<string, unknown>;
     const blockType = block.type as string;
     const idx = event.index as number;
@@ -449,8 +453,8 @@ class AnthropicToResponsesConverter implements Converter {
     if (blockType === 'text') {
       const part = {
         type: 'response.content_part.added',
-        item_id: this.streamItemId,
-        output_index: this.streamOutputIndex,
+        item_id: ctx.itemId,
+        output_index: ctx.outputIndex,
         content_index: idx,
         part: {
           type: 'output_text',
@@ -459,16 +463,16 @@ class AnthropicToResponsesConverter implements Converter {
         },
       };
       // Track the content block
-      this.streamAccumContent.push({ type: 'text', text: '' });
+      (ctx.accumContent as unknown[]).push({ type: 'text', text: '' });
       return formatSSE('response.content_part.added', JSON.stringify(part));
     }
 
     if (blockType === 'tool_use') {
-      this.streamOutputIndex++;
+      ctx.outputIndex = (ctx.outputIndex as number) + 1;
       const toolId = (block.id as string) || `tool_${idx}`;
       const item = {
         type: 'response.output_item.added',
-        output_index: this.streamOutputIndex,
+        output_index: ctx.outputIndex,
         item: {
           type: 'function_call',
           id: toolId,
@@ -478,7 +482,7 @@ class AnthropicToResponsesConverter implements Converter {
           status: 'in_progress',
         },
       };
-      this.streamAccumContent.push({
+      (ctx.accumContent as unknown[]).push({
         type: 'tool_use',
         id: block.id,
         name: block.name,
@@ -489,10 +493,10 @@ class AnthropicToResponsesConverter implements Converter {
 
     if (blockType === 'thinking') {
       // Map thinking blocks to a reasoning output item
-      this.streamOutputIndex++;
+      ctx.outputIndex = (ctx.outputIndex as number) + 1;
       const rsItem = {
         type: 'response.output_item.added',
-        output_index: this.streamOutputIndex,
+        output_index: ctx.outputIndex,
         item: {
           type: 'reasoning',
           id: `rs_${idx}`,
@@ -506,7 +510,7 @@ class AnthropicToResponsesConverter implements Converter {
     return null;
   }
 
-  private onContentBlockDelta(event: Record<string, unknown>): string | null {
+  private onContentBlockDelta(event: Record<string, unknown>, ctx: StreamContext): string | null {
     const delta = event.delta as Record<string, unknown>;
     const deltaType = delta.type as string;
     const idx = event.index as number;
@@ -515,14 +519,15 @@ class AnthropicToResponsesConverter implements Converter {
       const text = (delta.text as string) || '';
       const textDelta = {
         type: 'response.text.delta',
-        item_id: this.streamItemId,
-        output_index: this.streamOutputIndex,
+        item_id: ctx.itemId,
+        output_index: ctx.outputIndex,
         content_index: idx,
         delta: text,
       };
       // Update accumulated content
-      if (this.streamAccumContent[idx] && (this.streamAccumContent[idx] as Record<string, unknown>).type === 'text') {
-        (this.streamAccumContent[idx] as Record<string, unknown>).text += text;
+      const accum = ctx.accumContent as unknown[];
+      if (accum[idx] && (accum[idx] as Record<string, unknown>).type === 'text') {
+        (accum[idx] as Record<string, unknown>).text += text;
       }
       return formatSSE('response.text.delta', JSON.stringify(textDelta));
     }
@@ -531,8 +536,8 @@ class AnthropicToResponsesConverter implements Converter {
       const partial = (delta.partial_json as string) || '';
       const argsDelta = {
         type: 'response.function_call_arguments.delta',
-        item_id: this.streamItemId,
-        output_index: this.streamOutputIndex,
+        item_id: ctx.itemId,
+        output_index: ctx.outputIndex,
         delta: partial,
       };
       return formatSSE('response.function_call_arguments.delta', JSON.stringify(argsDelta));
@@ -542,7 +547,7 @@ class AnthropicToResponsesConverter implements Converter {
       return formatSSE('response.reasoning_summary_part.added', JSON.stringify({
         type: 'response.reasoning_summary_part.added',
         item_id: `rs_${idx}`,
-        output_index: this.streamOutputIndex,
+        output_index: ctx.outputIndex,
         part: { type: 'summary_text', text: delta.thinking || '' },
       }));
     }
@@ -550,31 +555,34 @@ class AnthropicToResponsesConverter implements Converter {
     return null;
   }
 
-  private onMessageDelta(event: Record<string, unknown>): string {
+  private onMessageDelta(event: Record<string, unknown>, ctx: StreamContext): string {
+    const accumContent = ctx.accumContent as unknown[];
+    const mapper = (c: unknown) => {
+      const block = c as Record<string, unknown>;
+      if (block.type === 'text') {
+        return { type: 'output_text', text: block.text, annotations: [] };
+      }
+      if (block.type === 'tool_use') {
+        return {
+          type: 'function_call',
+          id: block.id,
+          call_id: block.id,
+          name: block.name,
+          arguments: typeof block.input === 'string' ? block.input : JSON.stringify(block.input || {}),
+        };
+      }
+      return c;
+    };
+
     const done = {
       type: 'response.output_item.done',
-      output_index: this.streamOutputIndex,
+      output_index: ctx.outputIndex,
       item: {
         type: 'message',
-        id: this.streamItemId,
+        id: ctx.itemId,
         status: 'completed',
         role: 'assistant',
-        content: this.streamAccumContent.map((c) => {
-          const block = c as Record<string, unknown>;
-          if (block.type === 'text') {
-            return { type: 'output_text', text: block.text, annotations: [] };
-          }
-          if (block.type === 'tool_use') {
-            return {
-              type: 'function_call',
-              id: block.id,
-              call_id: block.id,
-              name: block.name,
-              arguments: typeof block.input === 'string' ? block.input : JSON.stringify(block.input || {}),
-            };
-          }
-          return c;
-        }),
+        content: accumContent.map(mapper),
       },
     };
 
@@ -582,32 +590,17 @@ class AnthropicToResponsesConverter implements Converter {
     const completed = {
       type: 'response.completed',
       response: {
-        id: this.streamResponseId,
+        id: ctx.responseId,
         object: 'response',
-        model: this.streamModel,
+        model: ctx.model,
         status: 'completed',
         output: [
           {
             type: 'message',
-            id: this.streamItemId,
+            id: ctx.itemId,
             role: 'assistant',
             status: 'completed',
-            content: this.streamAccumContent.map((c) => {
-              const block = c as Record<string, unknown>;
-              if (block.type === 'text') {
-                return { type: 'output_text', text: block.text, annotations: [] };
-              }
-              if (block.type === 'tool_use') {
-                return {
-                  type: 'function_call',
-                  id: block.id,
-                  call_id: block.id,
-                  name: block.name,
-                  arguments: typeof block.input === 'string' ? block.input : JSON.stringify(block.input || {}),
-                };
-              }
-              return c;
-            }),
+            content: accumContent.map(mapper),
           },
         ],
         usage,
@@ -629,11 +622,15 @@ class ResponsesToAnthropicConverter implements Converter {
   readonly fromProtocol = 'openai-responses';
   readonly toProtocol = 'anthropic';
 
-  // Stream conversion state
-  private streamMessageId = '';
-  private streamModel = '';
-  private streamRoles = new Map<number, string>();
-  private streamContentTypes = new Map<string, string>(); // itemId → type
+  createStreamContext(): StreamContext {
+    return {
+      state: {},
+      messageId: '',
+      model: '',
+      roles: new Map<number, string>(),
+      contentTypes: new Map<string, string>(),
+    };
+  }
 
   convertRequest(body: Record<string, unknown>, targetModel: string): Record<string, unknown> {
     const result: Record<string, unknown> = { model: targetModel };
@@ -731,7 +728,7 @@ class ResponsesToAnthropicConverter implements Converter {
     return result;
   }
 
-  convertStreamChunk(chunk: string): string | null {
+  convertStreamChunk(chunk: string, ctx: StreamContext): string | null {
     if (isDoneChunk(chunk)) return 'data: [DONE]\n\n';
 
     const parsed = parseSSEChunk(chunk);
@@ -744,21 +741,21 @@ class ResponsesToAnthropicConverter implements Converter {
 
     switch (type) {
       case 'response.created':
-        return this.onResponseCreated(event);
+        return this.onResponseCreated(event, ctx);
       case 'response.output_item.added':
-        return this.onOutputItemAdded(event);
+        return this.onOutputItemAdded(event, ctx);
       case 'response.content_part.added':
-        return this.onContentPartAdded(event);
+        return this.onContentPartAdded(event, ctx);
       case 'response.text.delta':
-        return this.onTextDelta(event);
+        return this.onTextDelta(event, ctx);
       case 'response.output_text.delta':
-        return this.onTextDelta(event);
+        return this.onTextDelta(event, ctx);
       case 'response.function_call_arguments.delta':
-        return this.onFunctionCallArgsDelta(event);
+        return this.onFunctionCallArgsDelta(event, ctx);
       case 'response.output_item.done':
-        return this.onOutputItemDone(event);
+        return this.onOutputItemDone(event, ctx);
       case 'response.completed':
-        return this.onResponseCompleted(event);
+        return this.onResponseCompleted(event, ctx);
       case 'error':
         return chunk; // forward errors
       default:
@@ -917,19 +914,19 @@ class ResponsesToAnthropicConverter implements Converter {
 
   // ── stream event handlers ──
 
-  private onResponseCreated(event: Record<string, unknown>): string {
+  private onResponseCreated(event: Record<string, unknown>, ctx: StreamContext): string {
     const resp = event.response as Record<string, unknown>;
-    this.streamMessageId = (resp.id as string) || `msg_${Date.now()}`;
-    this.streamModel = (resp.model as string) || '';
+    ctx.messageId = (resp.id as string) || `msg_${Date.now()}`;
+    ctx.model = (resp.model as string) || '';
 
     const msgStart = {
       type: 'message_start',
       message: {
-        id: this.streamMessageId,
+        id: ctx.messageId,
         type: 'message',
         role: 'assistant',
         content: [],
-        model: this.streamModel,
+        model: ctx.model,
         stop_reason: null,
         stop_sequence: null,
         usage: resp.usage || { input_tokens: 0, output_tokens: 0 },
@@ -939,21 +936,21 @@ class ResponsesToAnthropicConverter implements Converter {
     return formatSSE('message_start', JSON.stringify(msgStart));
   }
 
-  private onOutputItemAdded(event: Record<string, unknown>): string | null {
+  private onOutputItemAdded(event: Record<string, unknown>, ctx: StreamContext): string | null {
     const item = event.item as Record<string, unknown>;
     const itemType = item.type as string;
     const outputIdx = event.output_index as number;
     const itemId = (item.id as string) || '';
 
     if (itemType === 'message') {
-      this.streamRoles.set(outputIdx, item.role as string);
+      (ctx.roles as Map<number, string>).set(outputIdx, item.role as string);
       // Message output item doesn't directly map to a content_block_start;
       // content_part.added handles that.
       return null;
     }
 
     if (itemType === 'function_call') {
-      this.streamContentTypes.set(itemId, 'tool_use');
+      (ctx.contentTypes as Map<string, string>).set(itemId, 'tool_use');
       const block = {
         type: 'content_block_start',
         index: outputIdx,
@@ -968,7 +965,7 @@ class ResponsesToAnthropicConverter implements Converter {
     }
 
     if (itemType === 'reasoning') {
-      this.streamContentTypes.set(itemId, 'thinking');
+      (ctx.contentTypes as Map<string, string>).set(itemId, 'thinking');
       const block = {
         type: 'content_block_start',
         index: outputIdx,
@@ -983,7 +980,7 @@ class ResponsesToAnthropicConverter implements Converter {
     return null;
   }
 
-  private onContentPartAdded(event: Record<string, unknown>): string | null {
+  private onContentPartAdded(event: Record<string, unknown>, _ctx: StreamContext): string | null {
     const part = event.part as Record<string, unknown>;
     const idx = event.content_index as number;
 
@@ -1002,7 +999,7 @@ class ResponsesToAnthropicConverter implements Converter {
     return null;
   }
 
-  private onTextDelta(event: Record<string, unknown>): string | null {
+  private onTextDelta(event: Record<string, unknown>, _ctx: StreamContext): string | null {
     const delta = (event.delta as string) || '';
     const idx = event.content_index as number;
 
@@ -1018,7 +1015,7 @@ class ResponsesToAnthropicConverter implements Converter {
     return formatSSE('content_block_delta', JSON.stringify(anthropicDelta));
   }
 
-  private onFunctionCallArgsDelta(event: Record<string, unknown>): string | null {
+  private onFunctionCallArgsDelta(event: Record<string, unknown>, _ctx: StreamContext): string | null {
     const delta = (event.delta as string) || '';
     const outputIdx = event.output_index as number;
 
@@ -1034,7 +1031,7 @@ class ResponsesToAnthropicConverter implements Converter {
     return formatSSE('content_block_delta', JSON.stringify(anthropicDelta));
   }
 
-  private onOutputItemDone(event: Record<string, unknown>): string {
+  private onOutputItemDone(event: Record<string, unknown>, _ctx: StreamContext): string {
     const outputIdx = event.output_index as number;
 
     // Emit content_block_stop for this item
@@ -1058,7 +1055,7 @@ class ResponsesToAnthropicConverter implements Converter {
     );
   }
 
-  private onResponseCompleted(event: Record<string, unknown>): string {
+  private onResponseCompleted(event: Record<string, unknown>, _ctx: StreamContext): string {
     const resp = event.response as Record<string, unknown>;
     const usage = resp.usage || {};
 
@@ -1082,5 +1079,4 @@ class ResponsesToAnthropicConverter implements Converter {
 // Exports
 // ──────────────────────────────────────
 
-export const anthropicToResponses = new AnthropicToResponsesConverter();
-export const responsesToAnthropic = new ResponsesToAnthropicConverter();
+export { AnthropicToResponsesConverter, ResponsesToAnthropicConverter };

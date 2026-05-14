@@ -45,6 +45,25 @@ export function buildUpstreamRequest(
     }
   }
 
+  // Forward configured preserve headers from client request
+  const hopByHop = new Set([
+    'host', 'connection', 'content-length', 'transfer-encoding',
+    'keep-alive', 'te', 'trailer', 'upgrade',
+  ]);
+  for (const pattern of config.proxy.preserve_headers) {
+    for (const [key, value] of Object.entries(rawReqHeaders)) {
+      const lowerKey = key.toLowerCase();
+      if (hopByHop.has(lowerKey)) continue;
+      if (pattern.endsWith('*')) {
+        if (lowerKey.startsWith(pattern.slice(0, -1).toLowerCase())) {
+          headers[key] = value;
+        }
+      } else if (lowerKey === pattern.toLowerCase()) {
+        headers[key] = value;
+      }
+    }
+  }
+
   // Inject API key
   if (route.targetProtocol === 'anthropic') {
     headers['x-api-key'] = provider.api_key;

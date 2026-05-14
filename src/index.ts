@@ -17,6 +17,22 @@ async function main(): Promise<void> {
   const { port, host } = config.server;
   await app.listen({ port, host });
   console.log(`open-api-proxy running at http://${host}:${port}`);
+
+  // Graceful shutdown
+  const shutdown = async (signal: string) => {
+    console.log(`\nReceived ${signal}, shutting down gracefully...`);
+    try {
+      await app.close();
+      console.log('Server closed');
+      process.exit(0);
+    } catch (err) {
+      console.error('Error during shutdown:', err);
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 main().catch((err) => {

@@ -1,10 +1,19 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
+import { X } from 'lucide-react';
 
 export default function Settings() {
   const [config, setConfig] = useState<any>(null);
   const [saved, setSaved] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<any>(null);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [statusType, setStatusType] = useState<'success' | 'error'>('success');
+
+  const showStatus = (msg: string, type: 'success' | 'error' = 'success') => {
+    setStatusMessage(msg);
+    setStatusType(type);
+    if (type === 'success') setTimeout(() => setStatusMessage(''), 3000);
+  };
 
   useEffect(() => {
     apiClient.getConfig().then(setConfig).catch(() => {});
@@ -18,7 +27,7 @@ export default function Settings() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err: any) {
-      alert('Save failed: ' + err.message);
+      showStatus('保存失败: ' + err.message, 'error');
     }
   };
 
@@ -41,9 +50,9 @@ export default function Settings() {
         const imported = JSON.parse(ev.target?.result as string);
         await apiClient.updateConfig(imported);
         setConfig(imported);
-        alert('Config imported successfully');
+        showStatus('配置导入成功');
       } catch (err: any) {
-        alert('Import failed: ' + err.message);
+        showStatus('导入失败: ' + err.message, 'error');
       }
     };
     reader.readAsText(file);
@@ -54,6 +63,17 @@ export default function Settings() {
   return (
     <div>
       <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">系统设置</h2>
+
+      {statusMessage && (
+        <div className={`rounded-lg p-3 text-sm mb-4 flex items-center justify-between ${
+          statusType === 'success'
+            ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+            : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+        }`}>
+          <span>{statusMessage}</span>
+          <button onClick={() => setStatusMessage('')} className="opacity-60 hover:opacity-100"><X className="w-4 h-4" /></button>
+        </div>
+      )}
 
       <div className="space-y-6 max-w-2xl">
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
@@ -94,6 +114,34 @@ export default function Settings() {
                 <option value="error">error</option>
               </select>
             </div>
+          </div>
+        </section>
+
+        <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+          <h3 className="font-medium text-gray-900 dark:text-white mb-3">协议转换</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[
+              { key: 'openai_chat', label: 'OpenAI Chat Completions 转发' },
+              { key: 'anthropic_to_openai', label: 'Anthropic → OpenAI Chat' },
+              { key: 'openai_to_anthropic', label: 'OpenAI Chat → Anthropic' },
+              { key: 'anthropic_to_openai_responses', label: 'Anthropic → OpenAI Responses' },
+              { key: 'openai_to_anthropic_responses', label: 'OpenAI → Anthropic Responses' },
+              { key: 'openai_chat_to_responses', label: 'OpenAI Chat → Responses' },
+              { key: 'responses_to_openai_chat', label: 'Responses → OpenAI Chat' },
+            ].map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.conversions?.[key] ?? true}
+                  onChange={(e) => setConfig({
+                    ...config,
+                    conversions: { ...config.conversions, [key]: e.target.checked }
+                  })}
+                  className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+              </label>
+            ))}
           </div>
         </section>
 

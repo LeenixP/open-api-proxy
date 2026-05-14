@@ -37,14 +37,10 @@ export function registerUpdateRoutes(app: FastifyInstance): void {
   });
 
   app.post('/api/update/execute', async (_request, reply) => {
-    reply.send({ ok: true, message: 'Update triggered' });
-    setTimeout(async () => {
-      try {
-        const { execUpdate } = await import('../../update/executor.js');
-        await execUpdate();
-      } catch (err) {
-        console.error('Update failed:', err);
-      }
-    }, 1000);
+    reply.send({
+      ok: true,
+      message: 'Please run: npm update -g open-api-proxy',
+      hint: 'Automatic update is disabled for security. Use your package manager to upgrade.',
+    });
   });
 }

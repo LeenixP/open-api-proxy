@@ -2,10 +2,14 @@ import type { AppConfig, RouteInfo } from '../types.js';
 
 export function resolveRoute(
   config: AppConfig,
-  modelField: string,
+  modelField: unknown,
   endpointPath: string,
   stream: boolean,
 ): RouteInfo {
+  if (typeof modelField !== 'string' || modelField.length === 0) {
+    throw new Error(`Invalid model format: expected "provider/model", got ${typeof modelField}`);
+  }
+
   const slashIdx = modelField.indexOf('/');
   if (slashIdx === -1) {
     throw new Error(`Invalid model format: "${modelField}". Expected "provider/model".`);
@@ -36,8 +40,8 @@ export function resolveRoute(
   return { providerKey, provider, model, sourceProtocol, targetProtocol, stream };
 }
 
-function endpointPathToSourceProtocol(path: string): 'openai-chat' | 'anthropic' | 'openai-responses' {
-  if (path === '/v1/chat/completions') return 'openai-chat';
+function endpointPathToSourceProtocol(path: string): 'openai' | 'anthropic' | 'openai-responses' {
+  if (path === '/v1/chat/completions') return 'openai';
   if (path === '/v1/messages') return 'anthropic';
   if (path === '/v1/responses') return 'openai-responses';
   throw new Error(`Unknown endpoint path: ${path}`);

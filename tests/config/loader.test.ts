@@ -81,7 +81,7 @@ providers: {}
     writeFileSync(configPath, yaml);
     const config = loadConfig(configPath);
     expect(config.server.port).toBe(6312);
-    expect(config.server.host).toBe('0.0.0.0');
+    expect(config.server.host).toBe('127.0.0.1');
     expect(config._schema_version).toBe(1);
   });
 

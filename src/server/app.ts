@@ -12,6 +12,7 @@ import { registerProviderRoutes } from './routes/providers.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerLogsRoutes } from './routes/logs.js';
 import { registerUpdateRoutes } from './routes/update.js';
+import { registerPresetRoutes } from './routes/presets.js';
 import { requestLogger } from './middleware/logger.js';
 
 export async function createApp(config: AppConfig): Promise<FastifyInstance> {
@@ -43,9 +44,10 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   registerModelsRoutes(app, config);
   registerConfigRoutes(app, config);
   registerProviderRoutes(app, config);
-  registerHealthRoute(app);
+  registerHealthRoute(app, config);
   registerLogsRoutes(app);
   registerUpdateRoutes(app);
+  registerPresetRoutes(app, config);
 
   const uiDistPath = path.resolve(process.cwd(), 'dist/ui');
   if (existsSync(uiDistPath)) {

@@ -35,7 +35,7 @@ describe('resolveRoute', () => {
     const route = resolveRoute(testConfig, 'openai/gpt-4o', '/v1/chat/completions', true);
     expect(route.providerKey).toBe('openai');
     expect(route.model).toBe('gpt-4o');
-    expect(route.sourceProtocol).toBe('openai-chat');
+    expect(route.sourceProtocol).toBe('openai');
     expect(route.targetProtocol).toBe('openai');
     expect(route.stream).toBe(true);
   });

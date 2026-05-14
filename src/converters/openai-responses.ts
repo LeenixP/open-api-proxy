@@ -1,5 +1,5 @@
 import { parseSSELine, formatSSE, isDoneChunk, safeJsonParse } from './helpers.js';
-import type { Converter } from '../types.js';
+import type { Converter, StreamContext } from '../types.js';
 
 let idCounter = 0;
 function genId(prefix: string): string {
@@ -14,23 +14,18 @@ export class OpenAIChatToResponsesConverter implements Converter {
   readonly fromProtocol = 'openai';
   readonly toProtocol = 'openai-responses';
 
-  private sentCreated = false;
-  private outputIdx = 0;
-  private curTextItemId = '';
-  private fnCallIds: string[] = [];
-  private responseId = '';
-
-  private resetStream(): void {
-    this.sentCreated = false;
-    this.outputIdx = 0;
-    this.curTextItemId = '';
-    this.fnCallIds = [];
-    this.responseId = genId('resp');
+  createStreamContext(): StreamContext {
+    return {
+      state: {},
+      sentCreated: false,
+      outputIdx: 0,
+      curTextItemId: '',
+      fnCallIds: [] as string[],
+      responseId: genId('resp'),
+    };
   }
 
   convertRequest(body: Record<string, unknown>, _targetModel: string): Record<string, unknown> {
-    this.resetStream();
-
     const messages = (body.messages as Array<Record<string, unknown>>) || [];
     const result: Record<string, unknown> = {};
 
@@ -209,9 +204,13 @@ export class OpenAIChatToResponsesConverter implements Converter {
     return result;
   }
 
-  convertStreamChunk(chunk: string): string | null {
+  convertStreamChunk(chunk: string, ctx: StreamContext): string | null {
     if (isDoneChunk(chunk)) {
-      this.resetStream();
+      ctx.sentCreated = false;
+      ctx.outputIdx = 0;
+      ctx.curTextItemId = '';
+      ctx.fnCallIds = [] as string[];
+      ctx.responseId = genId('resp');
       return null;
     }
 
@@ -229,15 +228,15 @@ export class OpenAIChatToResponsesConverter implements Converter {
     const parts: string[] = [];
 
     // Emit response.created on first chunk with role or content
-    if (!this.sentCreated && (delta?.role === 'assistant' || delta?.content)) {
-      this.sentCreated = true;
+    if (!ctx.sentCreated && (delta?.role === 'assistant' || delta?.content)) {
+      ctx.sentCreated = true;
       parts.push(
         formatSSE(
           'response.created',
           JSON.stringify({
             type: 'response.created',
             response: {
-              id: this.responseId,
+              id: ctx.responseId,
               object: 'response',
               status: 'in_progress',
               output: [],
@@ -249,16 +248,16 @@ export class OpenAIChatToResponsesConverter implements Converter {
 
     // Handle text content delta
     if (delta?.content && typeof delta.content === 'string' && delta.content.length > 0) {
-      if (!this.curTextItemId) {
-        this.curTextItemId = genId('item');
+      if (!ctx.curTextItemId) {
+        ctx.curTextItemId = genId('item');
         parts.push(
           formatSSE(
             'response.output_item.added',
             JSON.stringify({
               type: 'response.output_item.added',
-              output_index: this.outputIdx,
+              output_index: ctx.outputIdx,
               item: {
-                id: this.curTextItemId,
+                id: ctx.curTextItemId,
                 type: 'message',
                 role: 'assistant',
                 content: [],
@@ -273,8 +272,8 @@ export class OpenAIChatToResponsesConverter implements Converter {
           'response.text.delta',
           JSON.stringify({
             type: 'response.text.delta',
-            item_id: this.curTextItemId,
-            output_index: this.outputIdx,
+            item_id: ctx.curTextItemId,
+            output_index: ctx.outputIdx,
             content_index: 0,
             delta: delta.content,
           }),
@@ -289,12 +288,13 @@ export class OpenAIChatToResponsesConverter implements Converter {
         const tc = toolCalls[i];
         const tcIdx = tc.index !== undefined ? Number(tc.index) : i;
         const fn = tc.function as Record<string, unknown> | undefined;
+        const fnCallIds = ctx.fnCallIds as string[];
 
         // First appearance with name → output_item.added
-        if (fn?.name && !this.fnCallIds[tcIdx]) {
+        if (fn?.name && !fnCallIds[tcIdx]) {
           const itemId = genId('item');
-          this.fnCallIds[tcIdx] = itemId;
-          const outIdx = this.outputIdx + (this.curTextItemId ? 1 : 0) + tcIdx;
+          fnCallIds[tcIdx] = itemId;
+          const outIdx = (ctx.outputIdx as number) + (ctx.curTextItemId ? 1 : 0) + tcIdx;
           parts.push(
             formatSSE(
               'response.output_item.added',
@@ -315,8 +315,8 @@ export class OpenAIChatToResponsesConverter implements Converter {
 
         // Arguments delta
         if (fn?.arguments && typeof fn.arguments === 'string') {
-          const itemId = this.fnCallIds[tcIdx];
-          const outIdx = this.outputIdx + (this.curTextItemId ? 1 : 0) + tcIdx;
+          const itemId = fnCallIds[tcIdx];
+          const outIdx = (ctx.outputIdx as number) + (ctx.curTextItemId ? 1 : 0) + tcIdx;
           parts.push(
             formatSSE(
               'response.function_call_arguments.delta',
@@ -349,7 +349,7 @@ export class OpenAIChatToResponsesConverter implements Converter {
           JSON.stringify({
             type: 'response.completed',
             response: {
-              id: this.responseId,
+              id: ctx.responseId,
               object: 'response',
               status: 'completed',
               model: data.model,
@@ -359,7 +359,11 @@ export class OpenAIChatToResponsesConverter implements Converter {
           }),
         ),
       );
-      this.resetStream();
+      ctx.sentCreated = false;
+      ctx.outputIdx = 0;
+      ctx.curTextItemId = '';
+      ctx.fnCallIds = [] as string[];
+      ctx.responseId = genId('resp');
     }
 
     return parts.length > 0 ? parts.join('') : null;
@@ -378,23 +382,18 @@ export class ResponsesToOpenAIChatConverter implements Converter {
   readonly fromProtocol = 'openai-responses';
   readonly toProtocol = 'openai';
 
-  private sentCreated = false;
-  private curToolIdx = 0;
-  private fnCallId = '';
-  private fnCallName = '';
-  private streamId = '';
-
-  private resetStream(): void {
-    this.sentCreated = false;
-    this.curToolIdx = 0;
-    this.fnCallId = '';
-    this.fnCallName = '';
-    this.streamId = genId('chatcmpl');
+  createStreamContext(): StreamContext {
+    return {
+      state: {},
+      sentCreated: false,
+      curToolIdx: 0,
+      fnCallId: '',
+      fnCallName: '',
+      streamId: genId('chatcmpl'),
+    };
   }
 
   convertRequest(body: Record<string, unknown>, _targetModel: string): Record<string, unknown> {
-    this.resetStream();
-
     const result: Record<string, unknown> = {};
     if (body.model !== undefined) result.model = body.model;
 
@@ -554,9 +553,13 @@ export class ResponsesToOpenAIChatConverter implements Converter {
     return result;
   }
 
-  convertStreamChunk(chunk: string): string | null {
+  convertStreamChunk(chunk: string, ctx: StreamContext): string | null {
     if (isDoneChunk(chunk)) {
-      this.resetStream();
+      ctx.sentCreated = false;
+      ctx.curToolIdx = 0;
+      ctx.fnCallId = '';
+      ctx.fnCallName = '';
+      ctx.streamId = genId('chatcmpl');
       return null;
     }
 
@@ -572,12 +575,12 @@ export class ResponsesToOpenAIChatConverter implements Converter {
     let result = '';
 
     if (eventType === 'response.created') {
-      this.sentCreated = true;
+      ctx.sentCreated = true;
       const response = (data.response as Record<string, unknown>) || {};
       result = formatSSE(
         '',
         JSON.stringify({
-          id: this.streamId,
+          id: ctx.streamId,
           object: 'chat.completion.chunk',
           created: Math.floor(Date.now() / 1000),
           model: response.model || '',
@@ -588,7 +591,7 @@ export class ResponsesToOpenAIChatConverter implements Converter {
       result = formatSSE(
         '',
         JSON.stringify({
-          id: this.streamId,
+          id: ctx.streamId,
           object: 'chat.completion.chunk',
           created: Math.floor(Date.now() / 1000),
           model: '',
@@ -598,12 +601,12 @@ export class ResponsesToOpenAIChatConverter implements Converter {
     } else if (eventType === 'response.output_item.added') {
       const item = (data.item as Record<string, unknown>) || {};
       if (item.type === 'function_call') {
-        this.fnCallId = (item.id as string) || genId('call');
-        this.fnCallName = (item.name as string) || '';
+        ctx.fnCallId = (item.id as string) || genId('call');
+        ctx.fnCallName = (item.name as string) || '';
         result = formatSSE(
           '',
           JSON.stringify({
-            id: this.streamId,
+            id: ctx.streamId,
             object: 'chat.completion.chunk',
             created: Math.floor(Date.now() / 1000),
             model: '',
@@ -613,10 +616,10 @@ export class ResponsesToOpenAIChatConverter implements Converter {
                 delta: {
                   tool_calls: [
                     {
-                      index: this.curToolIdx,
-                      id: this.fnCallId,
+                      index: ctx.curToolIdx,
+                      id: ctx.fnCallId,
                       type: 'function',
-                      function: { name: this.fnCallName, arguments: '' },
+                      function: { name: ctx.fnCallName, arguments: '' },
                     },
                   ],
                 },
@@ -630,7 +633,7 @@ export class ResponsesToOpenAIChatConverter implements Converter {
       result = formatSSE(
         '',
         JSON.stringify({
-          id: this.streamId,
+          id: ctx.streamId,
           object: 'chat.completion.chunk',
           created: Math.floor(Date.now() / 1000),
           model: '',
@@ -639,7 +642,7 @@ export class ResponsesToOpenAIChatConverter implements Converter {
               index: 0,
               delta: {
                 tool_calls: [
-                  { index: this.curToolIdx, function: { arguments: data.delta } },
+                  { index: ctx.curToolIdx, function: { arguments: data.delta } },
                 ],
               },
               finish_reason: null,
@@ -661,7 +664,7 @@ export class ResponsesToOpenAIChatConverter implements Converter {
       result = formatSSE(
         '',
         JSON.stringify({
-          id: this.streamId,
+          id: ctx.streamId,
           object: 'chat.completion.chunk',
           created: Math.floor(Date.now() / 1000),
           model: response.model || '',
@@ -669,7 +672,11 @@ export class ResponsesToOpenAIChatConverter implements Converter {
           ...(usageOut ? { usage: usageOut } : {}),
         }),
       );
-      this.resetStream();
+      ctx.sentCreated = false;
+      ctx.curToolIdx = 0;
+      ctx.fnCallId = '';
+      ctx.fnCallName = '';
+      ctx.streamId = genId('chatcmpl');
     } else {
       return null;
     }

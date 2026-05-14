@@ -24,11 +24,12 @@ export default function ProviderEditor({ initial, onSave, onClose }: Props) {
   const [apiKey, setApiKey] = useState(initial?.api_key || '');
   const [protocol, setProtocol] = useState(initial?.protocol || 'openai');
   const [models, setModels] = useState<string[]>(initial?.models || []);
+  const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (models.length === 0) {
-      alert('Please add at least one model');
+      setError('请至少添加一个模型');
       return;
     }
     onSave(key, { display_name: displayName, base_url: baseUrl, api_key: apiKey, protocol, models });
@@ -36,13 +37,14 @@ export default function ProviderEditor({ initial, onSave, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-auto">
+      <div role="dialog" aria-modal="true" className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             {initial?.key ? '编辑厂商' : '添加厂商'}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="关闭"><X className="w-5 h-5" /></button>
         </div>
+        {error && <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg p-2 text-sm mb-4">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Key (唯一标识)</label>

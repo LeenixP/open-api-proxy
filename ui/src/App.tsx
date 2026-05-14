@@ -11,19 +11,13 @@ type Page = 'dashboard' | 'providers' | 'playground' | 'logs' | 'settings';
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
 
-  const renderPage = () => {
-    switch (page) {
-      case 'dashboard': return <Dashboard />;
-      case 'providers': return <Providers />;
-      case 'playground': return <Playground />;
-      case 'logs': return <Logs />;
-      case 'settings': return <Settings />;
-    }
-  };
-
   return (
     <Layout currentPage={page} onNavigate={setPage}>
-      {renderPage()}
+      <div className={page === 'dashboard' ? '' : 'hidden'}><Dashboard /></div>
+      <div className={page === 'providers' ? '' : 'hidden'}><Providers /></div>
+      <div className={page === 'playground' ? '' : 'hidden'}><Playground /></div>
+      <div className={page === 'logs' ? '' : 'hidden'}><Logs /></div>
+      <div className={page === 'settings' ? '' : 'hidden'}><Settings /></div>
     </Layout>
   );
 }

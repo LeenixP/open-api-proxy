@@ -41,15 +41,15 @@ export default function Logs() {
           清空
         </button>
       </div>
-      <div ref={containerRef} className="bg-gray-900 rounded-xl p-4 h-[500px] overflow-auto font-mono text-xs">
+      <div ref={containerRef} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 h-[500px] overflow-auto font-mono text-xs">
         {logs.map((entry, i) => (
           <div key={i} className="flex gap-3 py-0.5">
-            <span className="text-gray-500 shrink-0">{new Date(entry.timestamp).toLocaleTimeString()}</span>
-            <span className={`shrink-0 w-10 ${entry.level === 'error' ? 'text-red-400' : entry.level === 'warn' ? 'text-amber-400' : 'text-gray-400'}`}>{entry.level}</span>
-            <span className="text-gray-300">{entry.message}</span>
+            <span className="text-gray-500 dark:text-gray-400 shrink-0">{new Date(entry.timestamp).toLocaleTimeString()}</span>
+            <span className={`shrink-0 w-10 ${entry.level === 'error' ? 'text-red-600 dark:text-red-400' : entry.level === 'warn' ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'}`}>{entry.level}</span>
+            <span className="text-gray-700 dark:text-gray-300">{entry.message}</span>
           </div>
         ))}
-        {logs.length === 0 && <span className="text-gray-500">等待日志...</span>}
+        {logs.length === 0 && <span className="text-gray-400 dark:text-gray-500">等待日志...</span>}
       </div>
     </div>
   );

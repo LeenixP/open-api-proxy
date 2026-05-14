@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   OpenAIChatToResponsesConverter,
   ResponsesToOpenAIChatConverter,
 } from '../../src/converters/openai-responses.js';
+import type { StreamContext } from '../../src/types.js';
 
 // ============================================================================
 // OpenAIChatToResponsesConverter
@@ -416,9 +417,15 @@ describe('OpenAIChatToResponsesConverter', () => {
   });
 
   describe('convertStreamChunk', () => {
+    let ctx: StreamContext;
+
+    beforeEach(() => {
+      ctx = converter.createStreamContext();
+    });
+
     it('should emit response.created on first delta with role', () => {
       const chunk = 'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}';
-      const result = converter.convertStreamChunk(chunk);
+      const result = converter.convertStreamChunk(chunk, ctx);
       expect(result).toBeDefined();
       expect(result).toContain('response.created');
     });
@@ -426,11 +433,9 @@ describe('OpenAIChatToResponsesConverter', () => {
     it('should emit response.text.delta for content delta', () => {
       // First chunk to trigger created
       converter.convertStreamChunk(
-        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}',
-      );
+        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}', ctx);
       const result = converter.convertStreamChunk(
-        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello world"},"finish_reason":null}]}',
-      );
+        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello world"},"finish_reason":null}]}', ctx);
       expect(result).toBeDefined();
       expect(result).toContain('response.text.delta');
       expect(result).toContain('Hello world');
@@ -439,11 +444,9 @@ describe('OpenAIChatToResponsesConverter', () => {
     it('should emit output_item.added for function_call tool name', () => {
       // Setup: trigger created first
       converter.convertStreamChunk(
-        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}',
-      );
+        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}', ctx);
       const result = converter.convertStreamChunk(
-        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}',
-      );
+        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}', ctx);
       expect(result).toBeDefined();
       expect(result).toContain('response.output_item.added');
       expect(result).toContain('function_call');
@@ -453,14 +456,11 @@ describe('OpenAIChatToResponsesConverter', () => {
     it('should emit function_call_arguments.delta for argument chunks', () => {
       // Setup
       converter.convertStreamChunk(
-        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}',
-      );
+        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}', ctx);
       converter.convertStreamChunk(
-        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}',
-      );
+        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}', ctx);
       const result = converter.convertStreamChunk(
-        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"location\\":\\"Tokyo\\"}"}}]},"finish_reason":null}]}',
-      );
+        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"location\\":\\"Tokyo\\"}"}}]},"finish_reason":null}]}', ctx);
       expect(result).toBeDefined();
       expect(result).toContain('response.function_call_arguments.delta');
     });
@@ -468,24 +468,21 @@ describe('OpenAIChatToResponsesConverter', () => {
     it('should emit response.completed on finish_reason', () => {
       // Setup: trigger created
       converter.convertStreamChunk(
-        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}',
-      );
+        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}', ctx);
       const result = converter.convertStreamChunk(
-        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}',
-      );
+        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}', ctx);
       expect(result).toBeDefined();
       expect(result).toContain('response.completed');
     });
 
     it('should return null for [DONE] chunk', () => {
-      const result = converter.convertStreamChunk('data: [DONE]');
+      const result = converter.convertStreamChunk('data: [DONE]', ctx);
       expect(result).toBeNull();
     });
 
     it('should return null for unrecognized chunks', () => {
       const result = converter.convertStreamChunk(
-        'data: {"unknown":"format"}',
-      );
+        'data: {"unknown":"format"}', ctx);
       expect(result).toBeNull();
     });
   });
@@ -793,10 +790,15 @@ describe('ResponsesToOpenAIChatConverter', () => {
   });
 
   describe('convertStreamChunk', () => {
+    let ctx: StreamContext;
+
+    beforeEach(() => {
+      ctx = converter.createStreamContext();
+    });
+
     it('should convert response.created to role delta', () => {
       const result = converter.convertStreamChunk(
-        'data: {"type":"response.created","response":{"id":"resp_1","model":"gpt-4"}}',
-      );
+        'data: {"type":"response.created","response":{"id":"resp_1","model":"gpt-4"}}', ctx);
       expect(result).toBeDefined();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
       expect(parsed.object).toBe('chat.completion.chunk');
@@ -806,11 +808,9 @@ describe('ResponsesToOpenAIChatConverter', () => {
     it('should convert response.text.delta to content delta', () => {
       // Setup: emit created first
       converter.convertStreamChunk(
-        'data: {"type":"response.created","response":{"id":"resp_1"}}',
-      );
+        'data: {"type":"response.created","response":{"id":"resp_1"}}', ctx);
       const result = converter.convertStreamChunk(
-        'data: {"type":"response.text.delta","delta":"Hello world"}',
-      );
+        'data: {"type":"response.text.delta","delta":"Hello world"}', ctx);
       expect(result).toBeDefined();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
       expect(parsed.choices[0].delta.content).toBe('Hello world');
@@ -818,11 +818,9 @@ describe('ResponsesToOpenAIChatConverter', () => {
 
     it('should convert response.output_text.delta to content delta', () => {
       converter.convertStreamChunk(
-        'data: {"type":"response.created","response":{"id":"resp_2"}}',
-      );
+        'data: {"type":"response.created","response":{"id":"resp_2"}}', ctx);
       const result = converter.convertStreamChunk(
-        'data: {"type":"response.output_text.delta","delta":"Test content"}',
-      );
+        'data: {"type":"response.output_text.delta","delta":"Test content"}', ctx);
       expect(result).toBeDefined();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
       expect(parsed.choices[0].delta.content).toBe('Test content');
@@ -830,11 +828,9 @@ describe('ResponsesToOpenAIChatConverter', () => {
 
     it('should convert function_call output_item.added to tool_call delta', () => {
       converter.convertStreamChunk(
-        'data: {"type":"response.created","response":{"id":"resp_3"}}',
-      );
+        'data: {"type":"response.created","response":{"id":"resp_3"}}', ctx);
       const result = converter.convertStreamChunk(
-        'data: {"type":"response.output_item.added","item":{"id":"item_fc_1","type":"function_call","name":"get_weather","arguments":"","status":"in_progress"}}',
-      );
+        'data: {"type":"response.output_item.added","item":{"id":"item_fc_1","type":"function_call","name":"get_weather","arguments":"","status":"in_progress"}}', ctx);
       expect(result).toBeDefined();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
       const tc = parsed.choices[0].delta.tool_calls[0];
@@ -844,14 +840,11 @@ describe('ResponsesToOpenAIChatConverter', () => {
 
     it('should convert function_call_arguments.delta to tool_call arguments delta', () => {
       converter.convertStreamChunk(
-        'data: {"type":"response.created","response":{"id":"resp_4"}}',
-      );
+        'data: {"type":"response.created","response":{"id":"resp_4"}}', ctx);
       converter.convertStreamChunk(
-        'data: {"type":"response.output_item.added","item":{"id":"item_fc_1","type":"function_call","name":"get_weather","arguments":"","status":"in_progress"}}',
-      );
+        'data: {"type":"response.output_item.added","item":{"id":"item_fc_1","type":"function_call","name":"get_weather","arguments":"","status":"in_progress"}}', ctx);
       const result = converter.convertStreamChunk(
-        'data: {"type":"response.function_call_arguments.delta","delta":"{\\"location\\":\\"Tokyo\\"}"}',
-      );
+        'data: {"type":"response.function_call_arguments.delta","delta":"{\\"location\\":\\"Tokyo\\"}"}', ctx);
       expect(result).toBeDefined();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
       expect(parsed.choices[0].delta.tool_calls[0].function.arguments).toBe(
@@ -861,11 +854,9 @@ describe('ResponsesToOpenAIChatConverter', () => {
 
     it('should convert response.completed to finish_reason + usage', () => {
       converter.convertStreamChunk(
-        'data: {"type":"response.created","response":{"id":"resp_5"}}',
-      );
+        'data: {"type":"response.created","response":{"id":"resp_5"}}', ctx);
       const result = converter.convertStreamChunk(
-        'data: {"type":"response.completed","response":{"id":"resp_5","model":"gpt-4","usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30}}}',
-      );
+        'data: {"type":"response.completed","response":{"id":"resp_5","model":"gpt-4","usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30}}}', ctx);
       expect(result).toBeDefined();
       const parsed = JSON.parse(result!.replace(/^data: /, '').trim());
       expect(parsed.choices[0].finish_reason).toBe('stop');
@@ -877,17 +868,15 @@ describe('ResponsesToOpenAIChatConverter', () => {
     });
 
     it('should return null for [DONE] chunk', () => {
-      const result = converter.convertStreamChunk('data: [DONE]');
+      const result = converter.convertStreamChunk('data: [DONE]', ctx);
       expect(result).toBeNull();
     });
 
     it('should return null for unrecognized event types', () => {
       converter.convertStreamChunk(
-        'data: {"type":"response.created","response":{"id":"resp_6"}}',
-      );
+        'data: {"type":"response.created","response":{"id":"resp_6"}}', ctx);
       const result = converter.convertStreamChunk(
-        'data: {"type":"response.unknown.event","data":"ignored"}',
-      );
+        'data: {"type":"response.unknown.event","data":"ignored"}', ctx);
       expect(result).toBeNull();
     });
   });

@@ -1,11 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { anthropicToResponses, responsesToAnthropic } from '../../src/converters/anthropic-responses.js';
+import { AnthropicToResponsesConverter, ResponsesToAnthropicConverter } from '../../src/converters/anthropic-responses.js';
+import type { StreamContext } from '../../src/types.js';
 
 // ──────────────────────────────────────────────
 // Anthropic → OpenAI Responses
 // ──────────────────────────────────────────────
 
 describe('AnthropicToResponsesConverter', () => {
+  let anthropicToResponses: AnthropicToResponsesConverter;
+
+  beforeEach(() => {
+    anthropicToResponses = new AnthropicToResponsesConverter();
+  });
+
   describe('convertRequest', () => {
     it('should convert basic text messages', () => {
       const result = anthropicToResponses.convertRequest(
@@ -395,10 +402,16 @@ describe('AnthropicToResponsesConverter', () => {
   });
 
   describe('convertStreamChunk', () => {
+    let ctx: StreamContext;
+
+    beforeEach(() => {
+      ctx = anthropicToResponses.createStreamContext();
+    });
+
     it('should convert message_start to response.created and response.output_item.added', () => {
       const chunk = 'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_001","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}\n\n';
 
-      const result = anthropicToResponses.convertStreamChunk(chunk);
+      const result = anthropicToResponses.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('event: response.created');
       expect(result).toContain('"type":"response.created"');
@@ -410,7 +423,7 @@ describe('AnthropicToResponsesConverter', () => {
     it('should convert text content_block_start to response.content_part.added', () => {
       const chunk = 'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n';
 
-      const result = anthropicToResponses.convertStreamChunk(chunk);
+      const result = anthropicToResponses.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('event: response.content_part.added');
       expect(result).toContain('"type":"response.content_part.added"');
@@ -421,15 +434,15 @@ describe('AnthropicToResponsesConverter', () => {
     it('should convert text_delta to response.text.delta', () => {
       // First set up state with message_start
       anthropicToResponses.convertStreamChunk(
-        'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_001","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}\n\n',
+        'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_001","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}\n\n', ctx,
       );
       // Then content_block_start
       anthropicToResponses.convertStreamChunk(
-        'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
+        'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n', ctx,
       );
 
       const chunk = 'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello, world!"}}\n\n';
-      const result = anthropicToResponses.convertStreamChunk(chunk);
+      const result = anthropicToResponses.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('event: response.text.delta');
       expect(result).toContain('"type":"response.text.delta"');
@@ -439,14 +452,14 @@ describe('AnthropicToResponsesConverter', () => {
     it('should convert input_json_delta to function_call_arguments.delta', () => {
       // Set up state
       anthropicToResponses.convertStreamChunk(
-        'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_001","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}\n\n',
+        'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_001","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}\n\n', ctx,
       );
       anthropicToResponses.convertStreamChunk(
-        'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_001","name":"get_weather","input":{}}}\n\n',
+        'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_001","name":"get_weather","input":{}}}\n\n', ctx,
       );
 
       const chunk = 'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"location\\":\\""}}\n\n';
-      const result = anthropicToResponses.convertStreamChunk(chunk);
+      const result = anthropicToResponses.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('event: response.function_call_arguments.delta');
       expect(result).toContain('"type":"response.function_call_arguments.delta"');
@@ -455,11 +468,11 @@ describe('AnthropicToResponsesConverter', () => {
     it('should convert tool_use start to response.output_item.added', () => {
       // Set up state
       anthropicToResponses.convertStreamChunk(
-        'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_001","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}\n\n',
+        'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_001","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}\n\n', ctx,
       );
 
       const chunk = 'event: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_001","name":"get_weather","input":{}}}\n\n';
-      const result = anthropicToResponses.convertStreamChunk(chunk);
+      const result = anthropicToResponses.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('event: response.output_item.added');
       expect(result).toContain('"type":"function_call"');
@@ -469,7 +482,7 @@ describe('AnthropicToResponsesConverter', () => {
 
     it('should forward content_block_stop as-is', () => {
       const chunk = 'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n';
-      const result = anthropicToResponses.convertStreamChunk(chunk);
+      const result = anthropicToResponses.convertStreamChunk(chunk, ctx);
 
       expect(result).toBe(chunk);
     });
@@ -477,11 +490,11 @@ describe('AnthropicToResponsesConverter', () => {
     it('should convert message_delta to response.output_item.done and response.completed', () => {
       // Set up state
       anthropicToResponses.convertStreamChunk(
-        'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_001","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}\n\n',
+        'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_001","type":"message","role":"assistant","model":"claude-sonnet-4-20250514","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}\n\n', ctx,
       );
 
       const chunk = 'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":25}}\n\n';
-      const result = anthropicToResponses.convertStreamChunk(chunk);
+      const result = anthropicToResponses.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('event: response.output_item.done');
       expect(result).toContain('"type":"response.output_item.done"');
@@ -491,14 +504,14 @@ describe('AnthropicToResponsesConverter', () => {
 
     it('should convert message_stop to [DONE]', () => {
       const chunk = 'event: message_stop\ndata: {"type":"message_stop"}\n\n';
-      const result = anthropicToResponses.convertStreamChunk(chunk);
+      const result = anthropicToResponses.convertStreamChunk(chunk, ctx);
 
       expect(result).toBe('data: [DONE]\n\n');
     });
 
     it('should forward error stream events', () => {
       const chunk = 'event: error\ndata: {"type":"error","error":{"type":"overloaded_error","message":"Server is busy"}}\n\n';
-      const result = anthropicToResponses.convertStreamChunk(chunk);
+      const result = anthropicToResponses.convertStreamChunk(chunk, ctx);
 
       expect(result).toBe(chunk);
     });
@@ -541,6 +554,12 @@ describe('AnthropicToResponsesConverter', () => {
 // ──────────────────────────────────────────────
 
 describe('ResponsesToAnthropicConverter', () => {
+  let responsesToAnthropic: ResponsesToAnthropicConverter;
+
+  beforeEach(() => {
+    responsesToAnthropic = new ResponsesToAnthropicConverter();
+  });
+
   describe('convertRequest', () => {
     it('should convert input_text to Anthropic message', () => {
       const result = responsesToAnthropic.convertRequest(
@@ -799,10 +818,16 @@ describe('ResponsesToAnthropicConverter', () => {
   });
 
   describe('convertStreamChunk', () => {
+    let ctx: StreamContext;
+
+    beforeEach(() => {
+      ctx = responsesToAnthropic.createStreamContext();
+    });
+
     it('should convert response.created to message_start', () => {
       const chunk = 'event: response.created\ndata: {"type":"response.created","response":{"id":"resp_001","object":"response","model":"gpt-5","status":"in_progress","output":[],"usage":null}}\n\n';
 
-      const result = responsesToAnthropic.convertStreamChunk(chunk);
+      const result = responsesToAnthropic.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('event: message_start');
       expect(result).toContain('"type":"message_start"');
@@ -812,7 +837,7 @@ describe('ResponsesToAnthropicConverter', () => {
     it('should convert response.content_part.added to content_block_start', () => {
       const chunk = 'event: response.content_part.added\ndata: {"type":"response.content_part.added","item_id":"msg_001","output_index":0,"content_index":0,"part":{"type":"output_text","text":"","annotations":[]}}\n\n';
 
-      const result = responsesToAnthropic.convertStreamChunk(chunk);
+      const result = responsesToAnthropic.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('event: content_block_start');
       expect(result).toContain('"type":"content_block_start"');
@@ -822,7 +847,7 @@ describe('ResponsesToAnthropicConverter', () => {
     it('should convert response.text.delta to content_block_delta text_delta', () => {
       const chunk = 'event: response.text.delta\ndata: {"type":"response.text.delta","item_id":"msg_001","output_index":0,"content_index":0,"delta":"Hello!"}\n\n';
 
-      const result = responsesToAnthropic.convertStreamChunk(chunk);
+      const result = responsesToAnthropic.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('"type":"content_block_delta"');
       expect(result).toContain('"type":"text_delta"');
@@ -832,7 +857,7 @@ describe('ResponsesToAnthropicConverter', () => {
     it('should convert response.output_item.added (function_call) to content_block_start tool_use', () => {
       const chunk = 'event: response.output_item.added\ndata: {"type":"response.output_item.added","output_index":1,"item":{"type":"function_call","id":"fc_001","call_id":"call_001","name":"search","arguments":"","status":"in_progress"}}\n\n';
 
-      const result = responsesToAnthropic.convertStreamChunk(chunk);
+      const result = responsesToAnthropic.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('event: content_block_start');
       expect(result).toContain('"type":"tool_use"');
@@ -842,7 +867,7 @@ describe('ResponsesToAnthropicConverter', () => {
     it('should convert response.output_text.delta to content_block_delta', () => {
       const chunk = 'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","item_id":"msg_001","output_index":0,"content_index":0,"delta":"World"}\n\n';
 
-      const result = responsesToAnthropic.convertStreamChunk(chunk);
+      const result = responsesToAnthropic.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('"type":"content_block_delta"');
       expect(result).toContain('"type":"text_delta"');
@@ -852,7 +877,7 @@ describe('ResponsesToAnthropicConverter', () => {
     it('should convert response.function_call_arguments.delta to content_block_delta', () => {
       const chunk = 'event: response.function_call_arguments.delta\ndata: {"type":"response.function_call_arguments.delta","output_index":0,"delta":"{\\"query\\":\\"test\\"}"}\n\n';
 
-      const result = responsesToAnthropic.convertStreamChunk(chunk);
+      const result = responsesToAnthropic.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('"type":"content_block_delta"');
       expect(result).toContain('"type":"input_json_delta"');
@@ -862,7 +887,7 @@ describe('ResponsesToAnthropicConverter', () => {
     it('should convert response.output_item.done to content_block_stop and message_delta', () => {
       const chunk = 'event: response.output_item.done\ndata: {"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"msg_001","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Done","annotations":[]}]}}\n\n';
 
-      const result = responsesToAnthropic.convertStreamChunk(chunk);
+      const result = responsesToAnthropic.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('event: content_block_stop');
       expect(result).toContain('"type":"content_block_stop"');
@@ -873,7 +898,7 @@ describe('ResponsesToAnthropicConverter', () => {
     it('should convert response.completed to message_delta and message_stop', () => {
       const chunk = 'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp_001","object":"response","model":"gpt-5","status":"completed","output":[],"usage":{"input_tokens":10,"output_tokens":20}}}\n\n';
 
-      const result = responsesToAnthropic.convertStreamChunk(chunk);
+      const result = responsesToAnthropic.convertStreamChunk(chunk, ctx);
 
       expect(result).toContain('event: message_delta');
       expect(result).toContain('event: message_stop');
