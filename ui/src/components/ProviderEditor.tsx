@@ -27,6 +27,10 @@ export default function ProviderEditor({ initial, onSave, onClose }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (models.length === 0) {
+      alert('Please add at least one model');
+      return;
+    }
     onSave(key, { display_name: displayName, base_url: baseUrl, api_key: apiKey, protocol, models });
   };
 

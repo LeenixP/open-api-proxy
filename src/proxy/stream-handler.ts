@@ -8,6 +8,7 @@ export async function proxyStreamToClient(
   reply: FastifyReply,
 ): Promise<void> {
   const converter = ConverterRegistry.get(route.sourceProtocol, route.targetProtocol);
+  const streamCtx = converter?.createStreamContext?.() ?? { state: {} };
 
   reply.raw.writeHead(upstreamResponse.status, {
     'Content-Type': 'text/event-stream',
@@ -38,7 +39,7 @@ export async function proxyStreamToClient(
         if (!trimmed) continue;
 
         const converted = converter
-          ? converter.convertStreamChunk(trimmed)
+          ? converter.convertStreamChunk(trimmed, streamCtx)
           : trimmed;
 
         if (converted !== null) {
@@ -50,7 +51,7 @@ export async function proxyStreamToClient(
     // Flush remaining buffer
     if (buffer.trim()) {
       const converted = converter
-        ? converter.convertStreamChunk(buffer.trim())
+        ? converter.convertStreamChunk(buffer.trim(), streamCtx)
         : buffer.trim();
       if (converted !== null) {
         reply.raw.write(converted + '\n\n');

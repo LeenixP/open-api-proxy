@@ -77,8 +77,9 @@ export default function Playground() {
               try {
                 const chunk = JSON.parse(line.slice(6));
                 const content = chunk.choices?.[0]?.delta?.content ||
-                  chunk.delta?.text || chunk.content?.[0]?.text ||
-                  chunk.type === 'content_block_delta' ? chunk.delta?.text : '';
+                  chunk.delta?.text ||
+                  chunk.content?.[0]?.text ||
+                  (chunk.type === 'content_block_delta' ? chunk.delta?.text : '');
                 if (content) setResponse((prev) => prev + content);
               } catch {}
             }

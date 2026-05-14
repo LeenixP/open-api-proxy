@@ -116,6 +116,7 @@ export default function Settings() {
               <input type="file" accept=".json,.yaml" onChange={handleImport} className="hidden" />
             </label>
           </div>
+          <p className="text-xs text-gray-500 mt-2">导出为 JSON 格式（服务端使用 YAML 存储）</p>
         </section>
 
         <button onClick={handleSave} className="bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm hover:bg-indigo-700">

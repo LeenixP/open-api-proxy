@@ -49,7 +49,7 @@ function deepMerge<T extends Record<string, unknown>>(base: T, overlay: Record<s
 
 export function loadConfig(configPath: string): AppConfig {
   if (!existsSync(configPath)) {
-    return { ...defaults };
+    return structuredClone(defaults);
   }
 
   const raw = readFileSync(configPath, 'utf8');
@@ -62,7 +62,7 @@ export function loadConfig(configPath: string): AppConfig {
   const { _schema_version, ...userData } = parsed;
   expandEnvInObject(userData);
 
-  const config = deepMerge(defaults as unknown as Record<string, unknown>, userData) as unknown as AppConfig;
+  const config = deepMerge(structuredClone(defaults) as unknown as Record<string, unknown>, userData) as unknown as AppConfig;
   config._schema_version = (parsed._schema_version as number) || defaults._schema_version;
 
   for (const provider of Object.values(config.providers)) {

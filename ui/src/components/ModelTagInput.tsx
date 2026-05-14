@@ -11,9 +11,13 @@ export default function ModelTagInput({ tags, onChange }: Props) {
 
   const addTag = () => {
     const trimmed = input.trim();
-    if (trimmed && !tags.includes(trimmed)) {
-      onChange([...tags, trimmed]);
+    if (!trimmed) return;
+    if (tags.includes(trimmed)) {
+      alert(`Model "${trimmed}" already exists`);
+      setInput('');
+      return;
     }
+    onChange([...tags, trimmed]);
     setInput('');
   };
 
