@@ -52,24 +52,56 @@ class ProviderHealthChecker {
     return status;
   }
 
-  // Probe a provider's base URL to check connectivity
+  // Reset all health records (for testing)
+  reset(): void {
+    this.records.clear();
+  }
+
+  // Probe a provider's base URL to check connectivity.
+  // Protocol-specific: tries /models first, falls back to base URL connectivity check.
   async probeProvider(key: string, provider: ProviderConfig): Promise<boolean> {
+    const baseUrl = provider.base_url.replace(/\/+$/, '');
+    const primaryUrl = baseUrl + '/models';
+
     try {
-      const url = provider.base_url.replace(/\/+$/, '') + '/models';
-      const res = await fetch(url, {
+      const res = await fetch(primaryUrl, {
         method: 'GET',
         headers: provider.protocol === 'anthropic'
           ? { 'x-api-key': provider.api_key, 'anthropic-version': '2023-06-01' }
           : { 'Authorization': `Bearer ${provider.api_key}` },
         signal: AbortSignal.timeout(this.healthCheckTimeout),
       });
+
       if (res.ok || res.status === 401 || res.status === 403) {
-        // 401/403 means the endpoint exists but auth failed - still "healthy"
+        // Endpoint exists — 401/403 means auth failed but service is reachable
         this.recordSuccess(key);
         return true;
       }
+
+      // If /models returns 404/405, the protocol may not support this endpoint.
+      // Fall back to checking base URL connectivity.
+      if (res.status === 404 || res.status === 405 || res.status === 501) {
+        return await this.probeBaseUrl(key, baseUrl);
+      }
+
       this.recordFailure(key);
       return false;
+    } catch {
+      // Network error on /models — try base URL as fallback
+      return await this.probeBaseUrl(key, baseUrl);
+    }
+  }
+
+  // Best-effort connectivity check against base URL
+  private async probeBaseUrl(key: string, baseUrl: string): Promise<boolean> {
+    try {
+      const res = await fetch(baseUrl, {
+        method: 'HEAD',
+        signal: AbortSignal.timeout(this.healthCheckTimeout),
+      });
+      // Any response (even an error page) means the host is reachable
+      this.recordSuccess(key);
+      return true;
     } catch {
       this.recordFailure(key);
       return false;

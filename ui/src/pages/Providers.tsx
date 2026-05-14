@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
 import { Plus, Pencil, Trash2, X, Loader2 } from 'lucide-react';
 import ProviderEditor from '../components/ProviderEditor';
+import { t } from '../i18n';
 
 export default function Providers() {
   const [providers, setProviders] = useState<Record<string, any>>({});
@@ -50,9 +51,9 @@ export default function Providers() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">厂商管理</h2>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{t('providers.title')}</h2>
         <button onClick={() => setEditing('new')} className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-indigo-700">
-          <Plus className="w-4 h-4" /> 添加厂商
+          <Plus className="w-4 h-4" /> {t('providers.add')}
         </button>
       </div>
 
@@ -60,7 +61,7 @@ export default function Providers() {
         <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg p-3 text-sm mb-4 flex items-center justify-between">
           <span>{error}</span>
           <div className="flex items-center gap-2">
-            <button onClick={load} className="text-red-600 dark:text-red-400 underline hover:no-underline">重试</button>
+            <button onClick={load} className="text-red-600 dark:text-red-400 underline hover:no-underline">{t('common.retry')}</button>
             <button onClick={() => setError('')} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
           </div>
         </div>
@@ -83,12 +84,12 @@ export default function Providers() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
               <tr>
-                <th className="text-left px-4 py-3 font-medium">名称</th>
-                <th className="text-left px-4 py-3 font-medium">Key</th>
-                <th className="text-left px-4 py-3 font-medium">协议</th>
-                <th className="text-left px-4 py-3 font-medium">模型数</th>
-                <th className="text-left px-4 py-3 font-medium">Base URL</th>
-                <th className="text-right px-4 py-3 font-medium">操作</th>
+                <th className="text-left px-4 py-3 font-medium">{t('providers.name')}</th>
+                <th className="text-left px-4 py-3 font-medium">{t('providers.key')}</th>
+                <th className="text-left px-4 py-3 font-medium">{t('providers.protocol')}</th>
+                <th className="text-left px-4 py-3 font-medium">{t('providers.models')}</th>
+                <th className="text-left px-4 py-3 font-medium">{t('providers.baseUrl')}</th>
+                <th className="text-right px-4 py-3 font-medium">{t('providers.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
@@ -105,7 +106,7 @@ export default function Providers() {
                     <button
                       onClick={() => setEditing({ key, data: p })}
                       className="text-gray-400 hover:text-indigo-500 mr-2"
-                      aria-label={`编辑 ${key}`}
+                      aria-label={t('providers.edit', { key })}
                     >
                       <Pencil aria-hidden="true" className="w-4 h-4" />
                     </button>

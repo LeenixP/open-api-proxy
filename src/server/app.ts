@@ -13,7 +13,9 @@ import { registerHealthRoute } from './routes/health.js';
 import { registerLogsRoutes } from './routes/logs.js';
 import { registerUpdateRoutes } from './routes/update.js';
 import { registerPresetRoutes } from './routes/presets.js';
-import { requestLogger } from './middleware/logger.js';
+import { requestLogger, initFileLogging } from './middleware/logger.js';
+import { initAuth, authMiddleware } from './middleware/auth.js';
+import { rateLimiter } from './middleware/rate-limit.js';
 
 export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   const app = Fastify({
@@ -24,6 +26,28 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   if (config.server.cors) {
     await app.register(fastifyCors, { origin: true });
   }
+
+  // File-based logging
+  if (config.logging.dir) {
+    initFileLogging(config.logging.dir, config.logging.max_files);
+  }
+
+  // Initialize management API authentication
+  initAuth();
+
+  // Management API rate limiter: 60 requests per minute
+  const mgmtRateLimiter = rateLimiter(60, 60_000);
+  // Proxy endpoints rate limiter: 300 requests per minute
+  const proxyRateLimiter = rateLimiter(300, 60_000);
+
+  app.addHook('preHandler', async (request, reply) => {
+    if (request.url.startsWith('/api/')) {
+      await authMiddleware(request, reply);
+      await mgmtRateLimiter(request, reply);
+    } else if (request.url.startsWith('/v1/')) {
+      await proxyRateLimiter(request, reply);
+    }
+  });
 
   app.addHook('onRequest', async (request) => {
     if (request.url.startsWith('/api/')) {

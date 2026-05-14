@@ -121,7 +121,6 @@ export default function Settings() {
           <h3 className="font-medium text-gray-900 dark:text-white mb-3">协议转换</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { key: 'openai_chat', label: 'OpenAI Chat Completions 转发' },
               { key: 'anthropic_to_openai', label: 'Anthropic → OpenAI Chat' },
               { key: 'openai_to_anthropic', label: 'OpenAI Chat → Anthropic' },
               { key: 'anthropic_to_openai_responses', label: 'Anthropic → OpenAI Responses' },

@@ -21,7 +21,7 @@ export function registerProxyRoutes(app: FastifyInstance, config: AppConfig): vo
       // Health check + failover
       let effectiveRoute: RouteInfo = route;
       if (healthChecker.isInCooldown(route.providerKey)) {
-        const failover = findFailover(config, route.providerKey, route.model);
+        const failover = findFailover(config, route.providerKey, route.model, route.provider.protocol);
         if (failover) {
           effectiveRoute = {
             ...route,

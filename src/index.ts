@@ -11,6 +11,20 @@ async function main(): Promise<void> {
   await runMigrations(CONFIG_PATH);
   const config = loadConfig(CONFIG_PATH);
   console.log(`Loaded ${Object.keys(config.providers).length} providers`);
+
+  // Security warnings
+  if (config.server.host === '0.0.0.0') {
+    console.warn('WARNING: Binding to 0.0.0.0 - management API is accessible from network. Set host to 127.0.0.1 for local-only access.');
+  }
+  const managementApiKey = process.env.MANAGEMENT_API_KEY;
+  if (!managementApiKey) {
+    const isLoopback = config.server.host === '127.0.0.1' || config.server.host === 'localhost' || config.server.host === '::1';
+    if (!isLoopback) {
+      console.warn('WARNING: No MANAGEMENT_API_KEY set. Management API is open and accessible from network. Set MANAGEMENT_API_KEY env var to enable authentication.');
+    } else {
+      console.warn('WARNING: No MANAGEMENT_API_KEY set. Management API is open (local-only mode). Set MANAGEMENT_API_KEY env var to enable authentication.');
+    }
+  }
   registerAllConverters();
   console.log('Protocol converters registered');
   const app = await createApp(config);

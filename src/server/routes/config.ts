@@ -5,6 +5,10 @@ import path from 'path';
 
 const CONFIG_PATH = process.env.CONFIG_PATH || path.resolve(process.cwd(), 'config.yaml');
 
+const ALLOWED_CONFIG_KEYS = new Set([
+  '_schema_version', 'server', 'proxy', 'providers', 'conversions', 'logging',
+]);
+
 function stripApiKeys(config: AppConfig): Record<string, unknown> {
   const safe = JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
   const providers = safe.providers as Record<string, Record<string, unknown>>;
@@ -18,13 +22,29 @@ function stripApiKeys(config: AppConfig): Record<string, unknown> {
   return safe;
 }
 
+function sanitizeConfig(input: Record<string, unknown>): Partial<AppConfig> {
+  const sanitized: Record<string, unknown> = {};
+  for (const key of Object.keys(input)) {
+    if (ALLOWED_CONFIG_KEYS.has(key)) {
+      sanitized[key] = input[key];
+    }
+  }
+  return sanitized as Partial<AppConfig>;
+}
+
 export function registerConfigRoutes(app: FastifyInstance, config: AppConfig): void {
   app.get('/api/config', async (_request, reply) => {
     reply.send(stripApiKeys(config));
   });
 
   app.put('/api/config', async (request, reply) => {
-    const newConfig = request.body as Record<string, unknown>;
+    const rawBody = request.body as Record<string, unknown>;
+    if (!rawBody || typeof rawBody !== 'object') {
+      return reply.status(400).send({ error: { message: 'Invalid config body' } });
+    }
+
+    const newConfig = sanitizeConfig(rawBody);
+
     // Preserve existing api_key values if not provided in update
     const newProviders = newConfig.providers as Record<string, Record<string, unknown>> | undefined;
     if (newProviders) {
@@ -34,8 +54,12 @@ export function registerConfigRoutes(app: FastifyInstance, config: AppConfig): v
         }
       }
     }
+
     writeConfig(CONFIG_PATH, newConfig as unknown as AppConfig);
-    Object.assign(config, newConfig);
+    // Only merge the sanitized keys into runtime config
+    for (const key of Object.keys(newConfig)) {
+      (config as unknown as Record<string, unknown>)[key] = (newConfig as Record<string, unknown>)[key];
+    }
     reply.send({ ok: true });
   });
 }

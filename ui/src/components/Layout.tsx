@@ -1,5 +1,5 @@
-import { ReactNode, useState } from 'react';
-import { LayoutDashboard, Server, Play, ScrollText, Settings, Menu, X } from 'lucide-react';
+import { ReactNode, useState, useEffect } from 'react';
+import { LayoutDashboard, Server, Play, ScrollText, Settings, Menu, X, Sun, Moon } from 'lucide-react';
 import UpdateBanner from './UpdateBanner';
 import { t } from '../i18n';
 
@@ -21,6 +21,16 @@ const navItems: Array<{ id: Page; i18nKey: string; icon: React.ComponentType<{ c
 
 export default function Layout({ currentPage, onNavigate, children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    const stored = localStorage.getItem('theme');
+    if (stored) return stored === 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
 
   const handleNav = (id: Page) => {
     onNavigate(id);
@@ -54,6 +64,16 @@ export default function Layout({ currentPage, onNavigate, children }: Props) {
             aria-label="关闭侧边栏"
           >
             <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-3 border-t border-gray-200 dark:border-gray-800">
+          <button
+            onClick={() => setIsDark(!isDark)}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            aria-label={isDark ? '切换浅色模式' : '切换深色模式'}
+          >
+            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {isDark ? t('nav.lightMode') : t('nav.darkMode')}
           </button>
         </div>
         <nav className="flex-1 p-3 space-y-1">
