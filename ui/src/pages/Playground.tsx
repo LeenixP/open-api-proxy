@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../api/client';
 import { Send, Loader2, Copy, Trash2 } from 'lucide-react';
+import { t } from '../i18n';
 
 export default function Playground() {
   const [endpoint, setEndpoint] = useState('/v1/chat/completions');
@@ -98,11 +99,11 @@ export default function Playground() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">API 测试</h2>
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">{t('playground.title')}</h2>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">端点</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.endpoint')}</label>
             <select value={endpoint} onChange={(e) => setEndpoint(e.target.value)} className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
               <option value="/v1/chat/completions">/v1/chat/completions (OpenAI Chat)</option>
               <option value="/v1/messages">/v1/messages (Anthropic Messages)</option>
@@ -110,59 +111,59 @@ export default function Playground() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Model (provider/model)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.model')}</label>
             <input value={model} onChange={(e) => setModel(e.target.value)}
               className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              placeholder="例如: openai/gpt-4o" list="model-list" />
+              placeholder={t('playground.modelPlaceholder')} list="model-list" />
             <datalist id="model-list">
               {models.map((m) => <option key={m} value={m} />)}
             </datalist>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">System Prompt</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.systemPrompt')}</label>
             <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={2}
               className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">User Message</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.userMessage')}</label>
             <textarea value={userMessage} onChange={(e) => setUserMessage(e.target.value)} rows={4}
-              className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white" placeholder="输入你的消息..." />
+              className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white" placeholder={t('playground.userMessagePlaceholder')} />
           </div>
           <div className="flex gap-4">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Temperature: {temperature}</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.temperatureLabel', { value: temperature })}</label>
               <input type="range" min="0" max="2" step="0.1" value={temperature} onChange={(e) => setTemperature(parseFloat(e.target.value))} className="w-full" />
             </div>
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Tokens</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.maxTokens')}</label>
               <input type="number" value={maxTokens} onChange={(e) => setMaxTokens(parseInt(e.target.value))}
                 className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
             </div>
           </div>
           <div className="flex items-center gap-2">
             <input type="checkbox" checked={stream} onChange={(e) => setStream(e.target.checked)} id="stream" />
-            <label htmlFor="stream" className="text-sm text-gray-700 dark:text-gray-300">流式输出</label>
+            <label htmlFor="stream" className="text-sm text-gray-700 dark:text-gray-300">{t('playground.stream')}</label>
           </div>
           <button onClick={handleSend} disabled={loading || !model || !userMessage}
             className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50">
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {loading ? '请求中...' : '发送'}
+            {loading ? t('playground.sending') : t('playground.send')}
           </button>
         </div>
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden flex flex-col max-h-[600px]">
           <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">响应</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('playground.responseTitle')}</span>
               {loading && stream && (
                 <span className="flex items-center gap-1 text-xs text-indigo-500">
                   <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
-                  流式输出中...
+                  {t('playground.streaming')}
                 </span>
               )}
               {loading && !stream && (
                 <span className="flex items-center gap-1 text-xs text-indigo-500">
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  请求中...
+                  {t('playground.sending')}
                 </span>
               )}
             </div>
@@ -171,22 +172,22 @@ export default function Playground() {
                 onClick={() => { navigator.clipboard.writeText(response); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
                 disabled={!response}
                 className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-30 rounded"
-                aria-label="复制响应"
+                aria-label={t('playground.copyResponse')}
               >
-                {copied ? <span className="text-xs text-green-500">已复制</span> : <Copy className="w-4 h-4" />}
+                {copied ? <span className="text-xs text-green-500">{t('playground.copied')}</span> : <Copy className="w-4 h-4" />}
               </button>
               <button
                 onClick={() => setResponse('')}
                 disabled={!response}
                 className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-30 rounded"
-                aria-label="清空响应"
+                aria-label={t('playground.clearResponse')}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
           </div>
           <div className="p-4 overflow-auto flex-1">
-            <pre ref={responseRef} className="text-gray-700 dark:text-green-400 text-sm whitespace-pre-wrap font-mono">{response || '响应将显示在这里...'}</pre>
+            <pre ref={responseRef} className="text-gray-700 dark:text-green-400 text-sm whitespace-pre-wrap font-mono">{response || t('playground.response')}</pre>
           </div>
         </div>
       </div>

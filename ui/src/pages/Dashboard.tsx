@@ -50,7 +50,7 @@ export default function Dashboard() {
         <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg p-3 text-sm mb-4 flex items-center justify-between">
           <span>{error}</span>
           <div className="flex items-center gap-2">
-            <button onClick={load} className="text-red-600 dark:text-red-400 underline hover:no-underline">重试</button>
+            <button onClick={load} className="text-red-600 dark:text-red-400 underline hover:no-underline">{t('common.retry')}</button>
             <button onClick={() => setError('')} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
           </div>
         </div>

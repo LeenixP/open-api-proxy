@@ -113,7 +113,7 @@ export default function Providers() {
                     <button
                       onClick={() => setDeleteTarget(key)}
                       className="text-gray-400 hover:text-red-500"
-                      aria-label={`删除 ${key}`}
+                      aria-label={t('providers.deleteAria', { key })}
                     >
                       <Trash2 aria-hidden="true" className="w-4 h-4" />
                     </button>
@@ -121,7 +121,7 @@ export default function Providers() {
                 </tr>
               ))}
               {Object.keys(providers).length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">暂无厂商，点击"添加厂商"开始</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">{t('providers.empty')}</td></tr>
               )}
             </tbody>
           </table>
@@ -133,20 +133,20 @@ export default function Providers() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl p-6 max-w-sm w-full">
             <p className="text-gray-900 dark:text-white mb-4">
-              确定要删除厂商 <span className="font-semibold">{deleteTarget}</span> 吗？此操作不可撤销。
+              {t('providers.deleteConfirm', { key: deleteTarget })}
             </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setDeleteTarget(null)}
                 className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg dark:text-gray-400 dark:hover:bg-gray-800"
               >
-                取消
+                {t('providers.cancel')}
               </button>
               <button
                 onClick={handleDelete}
                 className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
               >
-                删除
+                {t('providers.delete')}
               </button>
             </div>
           </div>

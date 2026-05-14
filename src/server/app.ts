@@ -24,6 +24,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   });
 
   if (config.server.cors) {
+    console.warn('CORS is configured to accept all origins (origin: true). This is convenient for local use but should be restricted in production.');
     await app.register(fastifyCors, { origin: true });
   }
 
@@ -56,6 +57,14 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   });
 
   app.addHook('onResponse', requestLogger);
+
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('X-XSS-Protection', '0');
+    reply.header('Referrer-Policy', 'no-referrer');
+    return payload;
+  });
 
   app.setErrorHandler<FastifyError>((error, request, reply) => {
     request.log.error({ err: error }, 'Unhandled error');

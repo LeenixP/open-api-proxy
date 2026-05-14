@@ -15,6 +15,10 @@ setInterval(() => {
   }
 }, 60_000).unref();
 
+export function resetRateLimitStore(): void {
+  store.clear();
+}
+
 export function rateLimiter(maxRequests: number, windowMs: number) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const key = request.ip || 'unknown';

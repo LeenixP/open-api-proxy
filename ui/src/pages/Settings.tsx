@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
 import { X } from 'lucide-react';
+import { t } from '../i18n';
 
 export default function Settings() {
   const [config, setConfig] = useState<any>(null);
@@ -27,7 +28,7 @@ export default function Settings() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err: any) {
-      showStatus('保存失败: ' + err.message, 'error');
+      showStatus(t('settings.saveFailed', { error: err.message }), 'error');
     }
   };
 
@@ -50,19 +51,19 @@ export default function Settings() {
         const imported = JSON.parse(ev.target?.result as string);
         await apiClient.updateConfig(imported);
         setConfig(imported);
-        showStatus('配置导入成功');
+        showStatus(t('settings.importSuccess'));
       } catch (err: any) {
-        showStatus('导入失败: ' + err.message, 'error');
+        showStatus(t('settings.importFailed', { error: err.message }), 'error');
       }
     };
     reader.readAsText(file);
   };
 
-  if (!config) return <div className="text-gray-400">加载中...</div>;
+  if (!config) return <div className="text-gray-400">{t('settings.loading')}</div>;
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">系统设置</h2>
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">{t('settings.title')}</h2>
 
       {statusMessage && (
         <div className={`rounded-lg p-3 text-sm mb-4 flex items-center justify-between ${
@@ -77,16 +78,16 @@ export default function Settings() {
 
       <div className="space-y-6 max-w-2xl">
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
-          <h3 className="font-medium text-gray-900 dark:text-white mb-3">服务器</h3>
+          <h3 className="font-medium text-gray-900 dark:text-white mb-3">{t('settings.server')}</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">端口</label>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">{t('settings.port')}</label>
               <input type="number" value={config.server?.port || 6312}
                 onChange={(e) => setConfig({ ...config, server: { ...config.server, port: parseInt(e.target.value) || 6312 } })}
                 className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Host</label>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">{t('settings.host')}</label>
               <input value={config.server?.host || '0.0.0.0'}
                 onChange={(e) => setConfig({ ...config, server: { ...config.server, host: e.target.value } })}
                 className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
@@ -95,16 +96,16 @@ export default function Settings() {
         </section>
 
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
-          <h3 className="font-medium text-gray-900 dark:text-white mb-3">代理参数</h3>
+          <h3 className="font-medium text-gray-900 dark:text-white mb-3">{t('settings.proxy')}</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">超时 (ms)</label>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">{t('settings.timeout')}</label>
               <input type="number" value={config.proxy?.timeout || 120000}
                 onChange={(e) => setConfig({ ...config, proxy: { ...config.proxy, timeout: parseInt(e.target.value) || 120000 } })}
                 className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">日志级别</label>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">{t('settings.logLevel')}</label>
               <select value={config.logging?.level || 'info'}
                 onChange={(e) => setConfig({ ...config, logging: { ...config.logging, level: e.target.value } })}
                 className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
@@ -118,7 +119,7 @@ export default function Settings() {
         </section>
 
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
-          <h3 className="font-medium text-gray-900 dark:text-white mb-3">协议转换</h3>
+          <h3 className="font-medium text-gray-900 dark:text-white mb-3">{t('settings.conversions')}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               { key: 'anthropic_to_openai', label: 'Anthropic → OpenAI Chat' },
@@ -145,29 +146,29 @@ export default function Settings() {
         </section>
 
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
-          <h3 className="font-medium text-gray-900 dark:text-white mb-3">版本更新</h3>
+          <h3 className="font-medium text-gray-900 dark:text-white mb-3">{t('settings.version')}</h3>
           <p className="text-sm text-gray-500 mb-2">
-            当前版本: {updateInfo?.current || '-'}
-            {updateInfo?.hasUpdate ? ` -> ${updateInfo.latest} (新版本可用)` : ' (已是最新)'}
+            {t('settings.currentVersion')}: {updateInfo?.current || '-'}
+            {updateInfo?.hasUpdate ? ` -> ${updateInfo.latest} (${t('settings.newVersion')})` : ` (${t('settings.latestVersion')})`}
           </p>
         </section>
 
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
-          <h3 className="font-medium text-gray-900 dark:text-white mb-3">配置导入/导出</h3>
+          <h3 className="font-medium text-gray-900 dark:text-white mb-3">{t('settings.importExport')}</h3>
           <div className="flex gap-3">
             <button onClick={handleExport} className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700">
-              导出配置
+              {t('settings.export')}
             </button>
             <label className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer">
-              导入配置
+              {t('settings.import')}
               <input type="file" accept=".json,.yaml" onChange={handleImport} className="hidden" />
             </label>
           </div>
-          <p className="text-xs text-gray-500 mt-2">导出为 JSON 格式（服务端使用 YAML 存储）</p>
+          <p className="text-xs text-gray-500 mt-2">{t('settings.importExportHint')}</p>
         </section>
 
         <button onClick={handleSave} className="bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm hover:bg-indigo-700">
-          {saved ? '✓ 已保存' : '保存设置'}
+          {saved ? `✓ ${t('settings.saved')}` : t('settings.save')}
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { t } from '../i18n';
 
 interface Props {
   tags: string[];
@@ -13,7 +14,7 @@ export default function ModelTagInput({ tags, onChange }: Props) {
     const trimmed = input.trim();
     if (!trimmed) return;
     if (tags.includes(trimmed)) {
-      alert(`Model "${trimmed}" already exists`);
+      alert(t('providers.modelDuplicate', { name: trimmed }));
       setInput('');
       return;
     }
@@ -38,7 +39,7 @@ export default function ModelTagInput({ tags, onChange }: Props) {
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
         className="flex-1 min-w-[120px] outline-none text-sm bg-transparent text-gray-900 dark:text-white"
-        placeholder="输入模型名，回车添加"
+        placeholder={t('providers.modelInputPlaceholder')}
       />
     </div>
   );

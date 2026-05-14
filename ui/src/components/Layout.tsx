@@ -1,7 +1,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { LayoutDashboard, Server, Play, ScrollText, Settings, Menu, X, Sun, Moon } from 'lucide-react';
 import UpdateBanner from './UpdateBanner';
-import { t } from '../i18n';
+import { t, setLocale, getLocale } from '../i18n';
 
 type Page = 'dashboard' | 'providers' | 'playground' | 'logs' | 'settings';
 
@@ -21,6 +21,7 @@ const navItems: Array<{ id: Page; i18nKey: string; icon: React.ComponentType<{ c
 
 export default function Layout({ currentPage, onNavigate, children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [lang, setLang] = useState<'zh' | 'en'>(getLocale());
   const [isDark, setIsDark] = useState(() => {
     const stored = localStorage.getItem('theme');
     if (stored) return stored === 'dark';
@@ -61,7 +62,7 @@ export default function Layout({ currentPage, onNavigate, children }: Props) {
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-            aria-label="关闭侧边栏"
+            aria-label={t('nav.closeSidebar')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -70,10 +71,18 @@ export default function Layout({ currentPage, onNavigate, children }: Props) {
           <button
             onClick={() => setIsDark(!isDark)}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            aria-label={isDark ? '切换浅色模式' : '切换深色模式'}
+            aria-label={isDark ? t('nav.switchLight') : t('nav.switchDark')}
           >
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             {isDark ? t('nav.lightMode') : t('nav.darkMode')}
+          </button>
+          <button
+            onClick={() => { const next = lang === 'zh' ? 'en' : 'zh'; setLang(next); setLocale(next); }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors mt-1"
+            aria-label={`Switch language to ${lang === 'zh' ? 'English' : 'Chinese'}`}
+          >
+            <span className="w-4 h-4 flex items-center justify-center text-xs font-bold">A</span>
+            {t(lang === 'zh' ? 'lang.zh' : 'lang.en')}
           </button>
         </div>
         <nav className="flex-1 p-3 space-y-1">
@@ -101,7 +110,7 @@ export default function Layout({ currentPage, onNavigate, children }: Props) {
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-            aria-label="打开菜单"
+            aria-label={t('nav.openMenu')}
           >
             <Menu className="w-5 h-5" />
           </button>
