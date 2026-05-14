@@ -396,6 +396,184 @@ open-api-proxy/
 
 ---
 
+## 架构
+
+### 请求流程
+
+```
+客户端
+  │
+  ▼
+┌──────────────────────────────────────────────────┐
+│                open-api-proxy                    │
+│                                                  │
+│  Fastify HTTP Server                             │
+│  ├── /v1/chat/completions  (OpenAI Chat)         │
+│  ├── /v1/messages          (Anthropic Messages)  │
+│  ├── /v1/responses         (OpenAI Responses)    │
+│  └── /v1/models                                  │
+│         │                                        │
+│         ▼                                        │
+│  代理引擎                                        │
+│  ├── 路由器:   解析 provider/model, 定位服务商   │
+│  ├── 故障转移: 检测不健康服务商, 自动切换        │
+│  └── 转发器:   向上游发送 HTTP 请求              │
+│         │                                        │
+│         ▼                                        │
+│  转换器管道                                      │
+│  ├── 请求转换 (客户端格式 → 上游格式)            │
+│  └── 响应转换 (上游格式 → 客户端格式)            │
+│         │                                        │
+└─────────┼────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  健康检查器          │
+│  熔断断路器,         │
+│  冷却期管理           │
+└─────────────────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  上游服务商          │
+│  (OpenAI, Anthropic,│
+│   DeepSeek 等)      │
+└─────────────────────┘
+```
+
+### 组件架构
+
+- **Fastify 服务器** -- 高性能 HTTP 服务器，处理所有入站请求。提供路由注册、中间件钩子（认证、限流、日志、安全头）和管理界面静态文件服务。
+
+- **代理引擎** -- 核心路由与转发层。`路由器` 解析 `provider/model` 格式，定位对应的上游服务商。`故障转移` 模块监控服务商健康状态，自动重定向到健康替代项。`转发器` 向上游服务商发送 HTTP 请求并流式回传响应。
+
+- **转换器管道** -- 六向双向协议转换引擎。每个转换器处理一个方向（例如 Anthropic Messages 到 OpenAI Chat）。管道根据客户端协议和上游服务商协议选择对应的转换器。所有转换器实现统一接口以保持一致性。
+
+- **健康检查器** -- 使用熔断断路器模式监控服务商可用性。连续失败达到配置的阈值后，服务商进入冷却期，请求自动路由到具有匹配模型的故障转移目标。
+
+### 数据流
+
+**非流式请求:**
+1. 客户端向代理端点发送 JSON 请求
+2. 代理解析 `provider/model` 并查找服务商配置
+3. 如果服务商协议与客户端协议不同，转换请求体
+4. 将（可能已转换的）请求转发到上游服务商
+5. 接收完整的上游响应
+6. 如果协议不同，将响应转换为客户端期望的格式
+7. 将（可能已转换的）响应发送回客户端
+
+**流式请求 (`stream: true`):**
+1. 客户端发送带 `"stream": true` 的 JSON 请求
+2. 执行非流式流程的步骤 1-3
+3. 代理与上游服务商建立流式 HTTP 连接
+4. 从上游接收到每条 SSE 事件时，实时转换并转发给客户端
+5. 连接保持打开，直到上游发送 `[DONE]` 信号（或等效信号）
+6. 上游的错误事件被转换并内嵌转发，保持流式体验
+
+---
+
+## 部署
+
+### Docker
+
+使用 Docker 构建和运行：
+
+```bash
+docker build -t open-api-proxy .
+docker run -d \
+  --name open-api-proxy \
+  -p 6312:6312 \
+  -v $(pwd)/config:/app/config \
+  -v $(pwd)/logs:/app/logs \
+  -e MANAGEMENT_API_KEY=your-secret-key \
+  open-api-proxy
+```
+
+### Systemd (Linux)
+
+创建 `/etc/systemd/system/open-api-proxy.service`：
+
+```ini
+[Unit]
+Description=open-api-proxy - LLM API Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=open-api-proxy
+WorkingDirectory=/opt/open-api-proxy
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=MANAGEMENT_API_KEY=your-secret-key
+
+# 安全加固
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/open-api-proxy/logs /opt/open-api-proxy/config
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启用并启动服务：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable open-api-proxy
+sudo systemctl start open-api-proxy
+```
+
+### Nginx 反向代理
+
+用于生产环境部署（含 TLS 终止）的 Nginx 配置示例：
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name proxy.example.com;
+
+    ssl_certificate     /etc/nginx/ssl/proxy.crt;
+    ssl_certificate_key /etc/nginx/ssl/proxy.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    # 代理 API 请求
+    location /v1/ {
+        proxy_pass http://127.0.0.1:6312;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # SSE 流式支持
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+    }
+
+    # 代理管理 API
+    location /api/ {
+        proxy_pass http://127.0.0.1:6312;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # 代理管理界面
+    location / {
+        proxy_pass http://127.0.0.1:6312;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+---
+
 ## 许可证
 
 [MIT](LICENSE)

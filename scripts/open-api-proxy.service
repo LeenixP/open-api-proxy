@@ -1,0 +1,32 @@
+[Unit]
+Description=open-api-proxy - LLM API Unified Gateway
+Documentation=https://github.com/leenixp/open-api-proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%u
+ExecStart=/usr/bin/node /usr/local/lib/node_modules/open-api-proxy/dist/index.js
+WorkingDirectory=%h/.config/open-api-proxy
+Restart=on-failure
+RestartSec=5
+Environment=CONFIG_PATH=%h/.config/open-api-proxy/config.yaml
+Environment=NODE_ENV=production
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.config/open-api-proxy
+ReadWritePaths=%h/.local/share/open-api-proxy
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictRealtime=yes
+
+# Resource limits
+LimitNOFILE=4096
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

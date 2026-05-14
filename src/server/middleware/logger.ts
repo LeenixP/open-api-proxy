@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { appendFileSync, mkdirSync } from 'fs';
+import { appendFileSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs';
 import path from 'path';
 
 export interface LogEntry {
@@ -28,7 +28,6 @@ function getLogFilePath(): string {
 function rotateLogs(): void {
   if (!logDir) return;
   try {
-    const { readdirSync, statSync, unlinkSync } = require('fs');
     const files = readdirSync(logDir)
       .filter((f: string) => f.startsWith('proxy-') && f.endsWith('.log'))
       .map((f: string) => ({ name: f, path: path.join(logDir!, f), mtime: statSync(path.join(logDir!, f)).mtime }))

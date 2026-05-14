@@ -396,6 +396,184 @@ open-api-proxy/
 
 ---
 
+## Architecture
+
+### Request Flow
+
+```
+Client
+  │
+  ▼
+┌──────────────────────────────────────────────────┐
+│                open-api-proxy                    │
+│                                                  │
+│  Fastify HTTP Server                             │
+│  ├── /v1/chat/completions  (OpenAI Chat)         │
+│  ├── /v1/messages          (Anthropic Messages)  │
+│  ├── /v1/responses         (OpenAI Responses)    │
+│  └── /v1/models                                  │
+│         │                                        │
+│         ▼                                        │
+│  Proxy Engine                                    │
+│  ├── Router:   Parse provider/model, resolve    │
+│  ├── Failover: Detect unhealthy providers,      │
+│  └── Forwarder: Dispatch HTTP to upstream       │
+│         │                                        │
+│         ▼                                        │
+│  Converter Pipeline                              │
+│  ├── Request convert  (client format → upstream) │
+│  └── Response convert (upstream → client format) │
+│         │                                        │
+└─────────┼────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  Health Checker     │
+│  Circuit breaker,   │
+│  cooldown management│
+└─────────────────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  Upstream Provider  │
+│  (OpenAI, Anthropic,│
+│   DeepSeek, etc.)   │
+└─────────────────────┘
+```
+
+### Component Architecture
+
+- **Fastify Server** -- High-performance HTTP server handling all incoming requests. Provides route registration, middleware hooks (auth, rate limiting, logging, security headers), and static file serving for the management UI.
+
+- **Proxy Engine** -- Core routing and forwarding layer. The `Router` parses the `provider/model` format to resolve which upstream provider to call. The `Failover` module monitors provider health and automatically redirects to healthy alternatives. The `Forwarder` sends HTTP requests to upstream providers and streams responses back.
+
+- **Converter Pipeline** -- Bidirectional 6-way protocol conversion engine. Each converter handles one direction (e.g., Anthropic Messages to OpenAI Chat). The pipeline selects the appropriate converter based on the client protocol and upstream provider protocol. All converters implement a common interface for consistency.
+
+- **Health Checker** -- Monitors provider availability using a circuit breaker pattern. After a configurable number of consecutive failures, a provider enters cooldown and requests are automatically routed to a failover target with matching models.
+
+### Data Flow
+
+**Non-streaming requests:**
+1. Client sends a JSON request to the proxy endpoint
+2. Proxy parses `provider/model` and looks up the provider configuration
+3. If the provider protocol differs from the client protocol, the request body is converted
+4. The (possibly converted) request is forwarded to the upstream provider
+5. The full upstream response is received
+6. If protocols differ, the response is converted to match the client's expected format
+7. The (possibly converted) response is sent back to the client
+
+**Streaming requests (`stream: true`):**
+1. Client sends a JSON request with `"stream": true`
+2. Steps 1-3 from the non-streaming flow apply
+3. Proxy establishes a streaming HTTP connection to the upstream provider
+4. As each SSE event arrives from upstream, it is converted in real time and forwarded to the client
+5. The connection stays open until the upstream sends a `[DONE]` signal (or equivalent)
+6. Error events from upstream are converted and forwarded inline, preserving the streaming experience
+
+---
+
+## Deployment
+
+### Docker
+
+Build and run with Docker:
+
+```bash
+docker build -t open-api-proxy .
+docker run -d \
+  --name open-api-proxy \
+  -p 6312:6312 \
+  -v $(pwd)/config:/app/config \
+  -v $(pwd)/logs:/app/logs \
+  -e MANAGEMENT_API_KEY=your-secret-key \
+  open-api-proxy
+```
+
+### Systemd (Linux)
+
+Create `/etc/systemd/system/open-api-proxy.service`:
+
+```ini
+[Unit]
+Description=open-api-proxy - LLM API Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=open-api-proxy
+WorkingDirectory=/opt/open-api-proxy
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=MANAGEMENT_API_KEY=your-secret-key
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/open-api-proxy/logs /opt/open-api-proxy/config
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable open-api-proxy
+sudo systemctl start open-api-proxy
+```
+
+### Nginx Reverse Proxy
+
+Example Nginx configuration for production deployment with TLS termination:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name proxy.example.com;
+
+    ssl_certificate     /etc/nginx/ssl/proxy.crt;
+    ssl_certificate_key /etc/nginx/ssl/proxy.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    # Proxy API requests
+    location /v1/ {
+        proxy_pass http://127.0.0.1:6312;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # SSE streaming support
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+    }
+
+    # Proxy management API
+    location /api/ {
+        proxy_pass http://127.0.0.1:6312;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Proxy management UI
+    location / {
+        proxy_pass http://127.0.0.1:6312;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+---
+
 ## License
 
 [MIT](LICENSE)
