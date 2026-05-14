@@ -1,0 +1,41 @@
+_schema_version: 1
+server:
+  port: 6312
+  host: "0.0.0.0"
+  cors: true
+proxy:
+  timeout: 120000
+  keep_alive: true
+  user_agent_override: ""
+  preserve_headers:
+    - x-request-id
+    - x-ratelimit-*
+providers:
+  openai:
+    display_name: "OpenAI"
+    base_url: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"
+    protocol: openai
+    models:
+      - gpt-5
+      - gpt-4o
+      - o4-mini
+  anthropic:
+    display_name: "Anthropic"
+    base_url: "https://api.anthropic.com"
+    api_key: "${ANTHROPIC_API_KEY}"
+    protocol: anthropic
+    models:
+      - claude-sonnet-4-20250514
+      - claude-opus-4-20250514
+conversions:
+  anthropic_to_openai: true
+  openai_to_anthropic: true
+  anthropic_to_openai_responses: true
+  openai_to_anthropic_responses: false
+  openai_chat_to_responses: true
+  responses_to_openai_chat: true
+logging:
+  level: "info"
+  dir: "logs"
+  max_files: 10
