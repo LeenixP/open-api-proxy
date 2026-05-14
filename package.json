@@ -1,8 +1,32 @@
 {
   "name": "open-api-proxy",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "0.1.0",
+  "description": "A lightweight local API proxy providing unified entry for all LLM providers with automatic protocol format conversion",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "open-api-proxy": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "config.yaml"
+  ],
+  "keywords": [
+    "llm",
+    "api-proxy",
+    "openai",
+    "anthropic",
+    "protocol-conversion"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/leenixp/open-api-proxy"
+  },
+  "author": "LiPeng",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "directories": {
     "doc": "docs"
   },
@@ -11,20 +35,14 @@
     "build": "tsc && vite build",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LeenixP/open-api-proxy.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/LeenixP/open-api-proxy/issues"
+    "url": "https://github.com/leenixp/open-api-proxy/issues"
   },
-  "homepage": "https://github.com/LeenixP/open-api-proxy#readme",
+  "homepage": "https://github.com/leenixp/open-api-proxy#readme",
   "dependencies": {
     "@fastify/cors": "^11.2.0",
     "@fastify/static": "^9.1.3",

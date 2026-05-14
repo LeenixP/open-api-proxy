@@ -12,6 +12,7 @@ import { registerProviderRoutes } from './routes/providers.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerLogsRoutes } from './routes/logs.js';
 import { registerUpdateRoutes } from './routes/update.js';
+import { requestLogger } from './middleware/logger.js';
 
 export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   const app = Fastify({
@@ -28,6 +29,8 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
       request.log.info({ url: request.url, method: request.method }, 'API request');
     }
   });
+
+  app.addHook('onResponse', requestLogger);
 
   app.setErrorHandler<FastifyError>((error, request, reply) => {
     request.log.error({ err: error }, 'Unhandled error');

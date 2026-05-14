@@ -1,0 +1,15 @@
+src/
+tests/
+ui/
+docs/
+scripts/
+.github/
+.gitignore
+tsconfig.json
+tsconfig.ui.json
+vite.config.ts
+vitest.config.ts
+tailwind.config.ts
+postcss.config.js
+node_modules/
+*.log

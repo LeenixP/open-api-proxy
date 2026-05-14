@@ -71,7 +71,6 @@ export default function ProviderEditor({ initial, onSave, onClose }: Props) {
               <option value="openai">OpenAI Chat Completions</option>
               <option value="openai-responses">OpenAI Responses</option>
               <option value="anthropic">Anthropic Messages</option>
-              <option value="gemini">Google Gemini</option>
             </select>
           </div>
           <div>

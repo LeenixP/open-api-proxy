@@ -1,4 +1,4 @@
-export type ProviderProtocol = 'openai' | 'anthropic' | 'openai-responses' | 'gemini';
+export type ProviderProtocol = 'openai' | 'anthropic' | 'openai-responses';
 
 export interface ProviderConfig {
   display_name: string;
@@ -60,11 +60,17 @@ export interface ConvertedRequest {
   body: string;
 }
 
+export interface StreamContext {
+  state: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface Converter {
   readonly fromProtocol: string;
   readonly toProtocol: string;
   convertRequest(body: Record<string, unknown>, targetModel: string): Record<string, unknown>;
   convertResponse(body: Record<string, unknown>): Record<string, unknown>;
-  convertStreamChunk(chunk: string): string | null;
+  convertStreamChunk(chunk: string, ctx: StreamContext): string | null;
   convertError(status: number, body: string): { status: number; body: string };
+  createStreamContext?(): StreamContext;
 }
