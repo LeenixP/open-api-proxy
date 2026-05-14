@@ -8,7 +8,7 @@ export function getCurrentVersion(): string {
   try {
     const pkgPath = path.resolve(process.cwd(), 'package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-    cachedVersion = pkg.version;
+    cachedVersion = (pkg.version as string) || '0.0.0';
     return cachedVersion;
   } catch {
     return '0.0.0';
