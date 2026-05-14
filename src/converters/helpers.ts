@@ -6,8 +6,29 @@ export function parseSSELine(line: string): { event: string; data: string } | nu
     return { event: '', data: trimmed.slice(6) };
   }
 
-  // Multi-line SSE not needed for current use cases
   return null;
+}
+
+/**
+ * Parse a full SSE chunk that may contain event and data lines.
+ * Example: "event: foo\ndata: {"bar":1}\n\n"
+ */
+export function parseSSEChunk(chunk: string): { event: string; data: string } | null {
+  const lines = chunk.trim().split('\n');
+  let event = '';
+  let data = '';
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('event: ')) {
+      event = trimmed.slice(7);
+    } else if (trimmed.startsWith('data: ')) {
+      data = trimmed.slice(6);
+    }
+  }
+
+  if (!data) return null;
+  return { event, data };
 }
 
 export function formatSSE(event: string, data: string): string {

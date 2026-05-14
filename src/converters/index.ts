@@ -1,8 +1,9 @@
 import { ConverterRegistry } from './registry.js';
+import { OpenAIChatToResponsesConverter, ResponsesToOpenAIChatConverter } from './openai-responses.js';
 
 export function registerAllConverters(): void {
-  // Converters will be imported and registered here in subsequent tasks
-  // For now, this is a placeholder
+  ConverterRegistry.register(new OpenAIChatToResponsesConverter());
+  ConverterRegistry.register(new ResponsesToOpenAIChatConverter());
 }
 
 export { ConverterRegistry } from './registry.js';
