@@ -1,6 +1,5 @@
 import type { Converter } from '../types.js';
-import { createConverter } from './base.js';
-import { parseSSELine, formatSSE, isDoneChunk, safeJsonParse } from './helpers.js';
+import { parseSSELine, parseSSEChunk, formatSSE, isDoneChunk, safeJsonParse } from './helpers.js';
 
 // ──────────────────────────────────────
 // Helper types
@@ -139,8 +138,12 @@ class AnthropicToResponsesConverter implements Converter {
     if (Array.isArray(body.output)) {
       for (const item of body.output as ResponsesOutputItem[]) {
         const converted = this.convertOutputItem(item);
-        if (converted) {
-          (result.content as unknown[]).push(converted);
+        if (converted !== null && converted !== undefined) {
+          if (Array.isArray(converted)) {
+            (result.content as unknown[]).push(...converted);
+          } else {
+            (result.content as unknown[]).push(converted);
+          }
         }
       }
     }
@@ -161,7 +164,7 @@ class AnthropicToResponsesConverter implements Converter {
   convertStreamChunk(chunk: string): string | null {
     if (isDoneChunk(chunk)) return 'data: [DONE]\n\n';
 
-    const parsed = parseSSELine(chunk);
+    const parsed = parseSSEChunk(chunk);
     if (!parsed) return null;
 
     const event = safeJsonParse(parsed.data) as Record<string, unknown>;
@@ -348,6 +351,7 @@ class AnthropicToResponsesConverter implements Converter {
             if (mapped) blocks.push(mapped);
           }
         }
+        // Return flat array; caller will spread it
         return blocks;
       }
       case 'function_call':
@@ -391,7 +395,6 @@ class AnthropicToResponsesConverter implements Converter {
   }
 
   private mapErrorStatus(status: number): number {
-    // Keep status mostly the same, but normalize a few
     if (status === 429) return 429;
     if (status === 401 || status === 403) return status;
     if (status >= 500) return status;
@@ -731,7 +734,7 @@ class ResponsesToAnthropicConverter implements Converter {
   convertStreamChunk(chunk: string): string | null {
     if (isDoneChunk(chunk)) return 'data: [DONE]\n\n';
 
-    const parsed = parseSSELine(chunk);
+    const parsed = parseSSEChunk(chunk);
     if (!parsed) return null;
 
     const event = safeJsonParse(parsed.data) as Record<string, unknown>;
@@ -747,13 +750,13 @@ class ResponsesToAnthropicConverter implements Converter {
       case 'response.content_part.added':
         return this.onContentPartAdded(event);
       case 'response.text.delta':
-        return this.onTextDelta(event, parsed.event || '');
+        return this.onTextDelta(event);
       case 'response.output_text.delta':
-        return this.onTextDelta(event, parsed.event || '');
+        return this.onTextDelta(event);
       case 'response.function_call_arguments.delta':
         return this.onFunctionCallArgsDelta(event);
       case 'response.output_item.done':
-        return this.onOutputItemDone(event, parsed.event || '');
+        return this.onOutputItemDone(event);
       case 'response.completed':
         return this.onResponseCompleted(event);
       case 'error':
@@ -999,7 +1002,7 @@ class ResponsesToAnthropicConverter implements Converter {
     return null;
   }
 
-  private onTextDelta(event: Record<string, unknown>, sseEvent: string): string | null {
+  private onTextDelta(event: Record<string, unknown>): string | null {
     const delta = (event.delta as string) || '';
     const idx = event.content_index as number;
 
@@ -1012,7 +1015,7 @@ class ResponsesToAnthropicConverter implements Converter {
       },
     };
 
-    return formatSSE(sseEvent || 'content_block_delta', JSON.stringify(anthropicDelta));
+    return formatSSE('content_block_delta', JSON.stringify(anthropicDelta));
   }
 
   private onFunctionCallArgsDelta(event: Record<string, unknown>): string | null {
@@ -1031,7 +1034,7 @@ class ResponsesToAnthropicConverter implements Converter {
     return formatSSE('content_block_delta', JSON.stringify(anthropicDelta));
   }
 
-  private onOutputItemDone(event: Record<string, unknown>, sseEvent: string): string {
+  private onOutputItemDone(event: Record<string, unknown>): string {
     const outputIdx = event.output_index as number;
 
     // Emit content_block_stop for this item
