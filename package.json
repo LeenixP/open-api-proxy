@@ -5,9 +5,10 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "open-api-proxy": "dist/index.js"
+    "open-api-proxy": "bin/open-api-proxy.js"
   },
   "files": [
+    "bin",
     "dist",
     "config.yaml"
   ],
