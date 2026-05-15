@@ -659,48 +659,46 @@ describe('AnthropicToOpenAIChatConverter', () => {
   });
 
   describe('convertError', () => {
-    it('should map Anthropic permission_error to OpenAI invalid_request_error', () => {
-      const result = converter.convertError(403, JSON.stringify({
-        type: 'error',
-        error: { type: 'permission_error', message: 'Insufficient permissions' },
+    it('should map OpenAI invalid_request_error to Anthropic invalid_request_error', () => {
+      const result = converter.convertError(400, JSON.stringify({
+        error: { type: 'invalid_request_error', message: 'Bad request' },
       }));
       const body = JSON.parse(result.body);
+      expect(body.type).toBe('error');
       expect(body.error.type).toBe('invalid_request_error');
-      expect(body.error.message).toBe('Insufficient permissions');
+      expect(body.error.message).toBe('Bad request');
     });
 
-    it('should map Anthropic authentication_error to OpenAI invalid_request_error', () => {
+    it('should map OpenAI authentication_error to Anthropic authentication_error', () => {
       const result = converter.convertError(401, JSON.stringify({
-        type: 'error',
-        error: { type: 'authentication_error', message: 'Invalid API key' },
+        error: { type: 'authentication_error', message: 'Invalid key' },
       }));
       const body = JSON.parse(result.body);
-      expect(body.error.type).toBe('invalid_request_error');
-      expect(body.error.message).toBe('Invalid API key');
+      expect(body.type).toBe('error');
+      expect(body.error.type).toBe('authentication_error');
     });
 
-    it('should map Anthropic rate_limit_error to OpenAI rate_limit_error', () => {
+    it('should map OpenAI rate_limit_error to Anthropic rate_limit_error', () => {
       const result = converter.convertError(429, JSON.stringify({
-        type: 'error',
-        error: { type: 'rate_limit_error', message: 'Too many requests' },
+        error: { type: 'rate_limit_error', message: 'Rate limited' },
       }));
       const body = JSON.parse(result.body);
+      expect(body.type).toBe('error');
       expect(body.error.type).toBe('rate_limit_error');
     });
 
-    it('should map Anthropic api_error to OpenAI server_error', () => {
+    it('should map OpenAI server_error to Anthropic api_error', () => {
       const result = converter.convertError(500, JSON.stringify({
-        type: 'error',
-        error: { type: 'api_error', message: 'Internal error' },
+        error: { type: 'server_error', message: 'Internal error' },
       }));
       const body = JSON.parse(result.body);
-      expect(body.error.type).toBe('server_error');
+      expect(body.type).toBe('error');
+      expect(body.error.type).toBe('api_error');
     });
 
     it('should preserve status code', () => {
       const result = converter.convertError(503, JSON.stringify({
-        type: 'error',
-        error: { type: 'overloaded_error', message: 'Overloaded' },
+        error: { type: 'server_error', message: 'Down' },
       }));
       expect(result.status).toBe(503);
     });
@@ -708,7 +706,8 @@ describe('AnthropicToOpenAIChatConverter', () => {
     it('should handle unparseable error body', () => {
       const result = converter.convertError(500, 'plain error text');
       const body = JSON.parse(result.body);
-      expect(body.error.type).toBe('server_error');
+      expect(body.type).toBe('error');
+      expect(body.error.type).toBe('api_error');
       expect(body.error.message).toBe('plain error text');
     });
   });
@@ -1350,42 +1349,47 @@ describe('OpenAIChatToAnthropicConverter', () => {
   });
 
   describe('convertError', () => {
-    it('should map OpenAI invalid_request_error to Anthropic invalid_request_error', () => {
-      const result = converter.convertError(400, JSON.stringify({
-        error: { type: 'invalid_request_error', message: 'Bad request' },
+    it('should map Anthropic permission_error to OpenAI invalid_request_error', () => {
+      const result = converter.convertError(403, JSON.stringify({
+        type: 'error',
+        error: { type: 'permission_error', message: 'Insufficient permissions' },
       }));
       const body = JSON.parse(result.body);
       expect(body.error.type).toBe('invalid_request_error');
-      expect(body.error.message).toBe('Bad request');
+      expect(body.error.message).toBe('Insufficient permissions');
     });
 
-    it('should map OpenAI rate_limit_error to Anthropic rate_limit_error', () => {
+    it('should map Anthropic authentication_error to OpenAI invalid_request_error', () => {
+      const result = converter.convertError(401, JSON.stringify({
+        type: 'error',
+        error: { type: 'authentication_error', message: 'Invalid key' },
+      }));
+      const body = JSON.parse(result.body);
+      expect(body.error.type).toBe('invalid_request_error');
+    });
+
+    it('should map Anthropic rate_limit_error to OpenAI rate_limit_error', () => {
       const result = converter.convertError(429, JSON.stringify({
+        type: 'error',
         error: { type: 'rate_limit_error', message: 'Rate limited' },
       }));
       const body = JSON.parse(result.body);
       expect(body.error.type).toBe('rate_limit_error');
     });
 
-    it('should map OpenAI authentication_error', () => {
-      const result = converter.convertError(401, JSON.stringify({
-        error: { type: 'authentication_error', message: 'Invalid key' },
-      }));
-      const body = JSON.parse(result.body);
-      expect(body.error.type).toBe('authentication_error');
-    });
-
-    it('should map OpenAI server_error to Anthropic api_error', () => {
+    it('should map Anthropic api_error to OpenAI server_error', () => {
       const result = converter.convertError(500, JSON.stringify({
-        error: { type: 'server_error', message: 'Internal error' },
+        type: 'error',
+        error: { type: 'api_error', message: 'Internal error' },
       }));
       const body = JSON.parse(result.body);
-      expect(body.error.type).toBe('api_error');
+      expect(body.error.type).toBe('server_error');
     });
 
     it('should preserve status code', () => {
       const result = converter.convertError(503, JSON.stringify({
-        error: { type: 'server_error', message: 'Down' },
+        type: 'error',
+        error: { type: 'overloaded_error', message: 'Overloaded' },
       }));
       expect(result.status).toBe(503);
     });
@@ -1393,7 +1397,7 @@ describe('OpenAIChatToAnthropicConverter', () => {
     it('should handle unparseable error body', () => {
       const result = converter.convertError(500, 'raw error');
       const body = JSON.parse(result.body);
-      expect(body.error.type).toBe('api_error');
+      expect(body.error.type).toBe('server_error');
       expect(body.error.message).toBe('raw error');
     });
   });

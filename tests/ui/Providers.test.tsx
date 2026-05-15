@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Providers from '../../ui/src/pages/Providers';
 import { apiClient } from '../../ui/src/api/client';
+import { LocaleProvider } from '../../ui/src/i18n/LocaleContext';
 
 vi.mock('../../ui/src/api/client', () => ({
   apiClient: {
@@ -25,14 +26,20 @@ vi.mock('../../ui/src/api/client', () => ({
 // Mock window.alert for duplicate model warning
 window.alert = vi.fn();
 
+function renderWithLocale(ui: React.ReactElement) {
+  return render(<LocaleProvider>{ui}</LocaleProvider>);
+}
+
 const mockProviders = {
-  openai: { display_name: 'OpenAI', protocol: 'openai', models: ['gpt-4o', 'gpt-4o-mini'], base_url: 'https://api.openai.com/v1' },
-  anthropic: { display_name: 'Anthropic', protocol: 'anthropic', models: ['claude-sonnet-4-20250514'], base_url: 'https://api.anthropic.com' },
+  openai: { display_name: 'OpenAI', protocol: 'openai', models: ['gpt-4o', 'gpt-4o-mini'], base_url: 'https://api.openai.com/v1', api_key: 'sk-test' },
+  anthropic: { display_name: 'Anthropic', protocol: 'anthropic', models: ['claude-sonnet-4-20250514'], base_url: 'https://api.anthropic.com', api_key: 'sk-ant-test' },
 };
 
 describe('Providers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    localStorage.setItem('locale', 'zh');
     vi.mocked(apiClient.getPresets).mockResolvedValue({});
     vi.mocked(apiClient.getHealth).mockResolvedValue({ uptime: 0, providers: {} });
     vi.mocked(apiClient.getModels).mockResolvedValue({ data: [] });
@@ -42,7 +49,7 @@ describe('Providers', () => {
     it('shows empty state when no providers', async () => {
       vi.mocked(apiClient.getProviders).mockResolvedValue({});
 
-      render(<Providers />);
+      renderWithLocale(<Providers />);
 
       await waitFor(() => {
         expect(screen.getByText('暂无厂商，点击"添加厂商"开始')).toBeInTheDocument();
@@ -54,7 +61,7 @@ describe('Providers', () => {
     it('shows provider list in table', async () => {
       vi.mocked(apiClient.getProviders).mockResolvedValue(mockProviders);
 
-      render(<Providers />);
+      renderWithLocale(<Providers />);
 
       await waitFor(() => {
         expect(screen.getByText('OpenAI')).toBeInTheDocument();
@@ -71,7 +78,7 @@ describe('Providers', () => {
     it('shows protocol badges', async () => {
       vi.mocked(apiClient.getProviders).mockResolvedValue(mockProviders);
 
-      render(<Providers />);
+      renderWithLocale(<Providers />);
 
       await waitFor(() => {
         const protocolElements = screen.getAllByText('openai');
@@ -82,7 +89,7 @@ describe('Providers', () => {
     it('shows model chips in the table', async () => {
       vi.mocked(apiClient.getProviders).mockResolvedValue(mockProviders);
 
-      render(<Providers />);
+      renderWithLocale(<Providers />);
 
       await waitFor(() => {
         expect(screen.getByText('gpt-4o')).toBeInTheDocument();
@@ -90,13 +97,69 @@ describe('Providers', () => {
         expect(screen.getByText('claude-sonnet-4-20250514')).toBeInTheDocument();
       });
     });
+
+    it('has a search input', async () => {
+      vi.mocked(apiClient.getProviders).mockResolvedValue(mockProviders);
+
+      renderWithLocale(<Providers />);
+
+      await waitFor(() => {
+        expect(screen.getByText('OpenAI')).toBeInTheDocument();
+      });
+
+      const searchInput = screen.getByPlaceholderText('搜索厂商名称、Key 或 URL...');
+      expect(searchInput).toBeInTheDocument();
+    });
+
+    it('filters providers by search query', async () => {
+      vi.mocked(apiClient.getProviders).mockResolvedValue(mockProviders);
+
+      renderWithLocale(<Providers />);
+
+      await waitFor(() => {
+        expect(screen.getByText('OpenAI')).toBeInTheDocument();
+      });
+
+      const searchInput = screen.getByPlaceholderText('搜索厂商名称、Key 或 URL...');
+      fireEvent.change(searchInput, { target: { value: 'openai' } });
+
+      expect(screen.getByText('OpenAI')).toBeInTheDocument();
+      expect(screen.queryByText('Anthropic')).not.toBeInTheDocument();
+    });
+
+    it('shows test button for each provider', async () => {
+      vi.mocked(apiClient.getProviders).mockResolvedValue(mockProviders);
+
+      renderWithLocale(<Providers />);
+
+      await waitFor(() => {
+        expect(screen.getByText('OpenAI')).toBeInTheDocument();
+      });
+
+      expect(screen.getByLabelText('测试 openai')).toBeInTheDocument();
+      expect(screen.getByLabelText('测试 anthropic')).toBeInTheDocument();
+    });
+
+    it('calls onTestProvider when test button is clicked', async () => {
+      vi.mocked(apiClient.getProviders).mockResolvedValue(mockProviders);
+      const onTestProvider = vi.fn();
+
+      renderWithLocale(<Providers onTestProvider={onTestProvider} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('OpenAI')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByLabelText('测试 openai'));
+      expect(onTestProvider).toHaveBeenCalledWith({ providerKey: 'openai', model: 'openai/gpt-4o' });
+    });
   });
 
   describe('Add provider', () => {
     it('opens modal when add button is clicked', async () => {
       vi.mocked(apiClient.getProviders).mockResolvedValue({});
 
-      render(<Providers />);
+      renderWithLocale(<Providers />);
 
       await waitFor(() => {
         expect(screen.getByText('暂无厂商，点击"添加厂商"开始')).toBeInTheDocument();
@@ -113,7 +176,7 @@ describe('Providers', () => {
     it('closes modal when cancel is clicked', async () => {
       vi.mocked(apiClient.getProviders).mockResolvedValue({});
 
-      render(<Providers />);
+      renderWithLocale(<Providers />);
 
       await waitFor(() => {
         expect(screen.getByText('暂无厂商，点击"添加厂商"开始')).toBeInTheDocument();
@@ -134,7 +197,7 @@ describe('Providers', () => {
       vi.mocked(apiClient.getProviders).mockResolvedValue({});
       vi.mocked(apiClient.createProvider).mockResolvedValue({});
 
-      render(<Providers />);
+      renderWithLocale(<Providers />);
 
       await waitFor(() => {
         expect(screen.getByText('暂无厂商，点击"添加厂商"开始')).toBeInTheDocument();
@@ -178,7 +241,7 @@ describe('Providers', () => {
     it('shows delete confirmation when trash button is clicked', async () => {
       vi.mocked(apiClient.getProviders).mockResolvedValue(mockProviders);
 
-      render(<Providers />);
+      renderWithLocale(<Providers />);
 
       await waitFor(() => {
         expect(screen.getByText('OpenAI')).toBeInTheDocument();
@@ -196,7 +259,7 @@ describe('Providers', () => {
     it('cancels delete when cancel is clicked', async () => {
       vi.mocked(apiClient.getProviders).mockResolvedValue(mockProviders);
 
-      render(<Providers />);
+      renderWithLocale(<Providers />);
 
       await waitFor(() => {
         expect(screen.getByText('OpenAI')).toBeInTheDocument();
@@ -218,7 +281,7 @@ describe('Providers', () => {
       vi.mocked(apiClient.getProviders).mockResolvedValue(mockProviders);
       vi.mocked(apiClient.deleteProvider).mockResolvedValue({});
 
-      render(<Providers />);
+      renderWithLocale(<Providers />);
 
       await waitFor(() => {
         expect(screen.getByText('OpenAI')).toBeInTheDocument();
@@ -240,7 +303,7 @@ describe('Providers', () => {
     it('shows loading skeleton while fetching', () => {
       vi.mocked(apiClient.getProviders).mockImplementation(() => new Promise(() => {}));
 
-      render(<Providers />);
+      renderWithLocale(<Providers />);
 
       // Title should be visible
       expect(screen.getByText('厂商管理')).toBeInTheDocument();

@@ -98,7 +98,7 @@ providers: {}
 });
 
 describe('writeConfig', () => {
-  it('should write config and read it back', () => {
+  it('should write config and read it back', async () => {
     const yaml = `
 providers:
   test:
@@ -111,7 +111,7 @@ providers:
     writeFileSync(configPath, yaml);
     const config = loadConfig(configPath);
     config.providers.test.models.push('m2');
-    writeConfig(configPath, config);
+    await writeConfig(configPath, config);
 
     const reloaded = loadConfig(configPath);
     expect(reloaded.providers.test.models).toEqual(['m1', 'm2']);

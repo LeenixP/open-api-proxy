@@ -3,10 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import Playground from '../../ui/src/pages/Playground';
 import { apiClient } from '../../ui/src/api/client';
+import { LocaleProvider } from '../../ui/src/i18n/LocaleContext';
 
 vi.mock('../../ui/src/api/client', () => ({
   apiClient: {
-    getProviders: vi.fn().mockResolvedValue({}),
+    getProviders: vi.fn().mockResolvedValue({
+      openai: { display_name: 'OpenAI', protocol: 'openai', models: ['gpt-4o', 'gpt-4o-mini'], base_url: 'https://api.openai.com/v1' },
+      anthropic: { display_name: 'Anthropic', protocol: 'anthropic', models: ['claude-sonnet'], base_url: 'https://api.anthropic.com' },
+    }),
     getHealth: vi.fn(),
     getModels: vi.fn().mockResolvedValue({ data: [{ id: 'openai/gpt-4o' }, { id: 'anthropic/claude-sonnet' }] }),
     getConfig: vi.fn().mockResolvedValue({ conversions: {} }),
@@ -27,11 +31,15 @@ Object.assign(navigator, {
   },
 });
 
+function renderWithLocale(ui: React.ReactElement) {
+  return render(<LocaleProvider>{ui}</LocaleProvider>);
+}
+
 // Helper to render and wait for async state to settle
 async function renderPlayground() {
   let result: ReturnType<typeof render>;
   await act(async () => {
-    result = render(<Playground />);
+    result = renderWithLocale(<Playground />);
   });
   // Wait for getModels useEffect to settle
   await waitFor(() => {
@@ -43,6 +51,8 @@ async function renderPlayground() {
 describe('Playground', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    localStorage.setItem('locale', 'zh');
   });
 
   it('renders the page title', async () => {
@@ -52,28 +62,75 @@ describe('Playground', () => {
 
   describe('Endpoint selector', () => {
     it('renders endpoint selector with 3 options', async () => {
-      const { container } = await renderPlayground();
-      // Label is a sibling of select, no htmlFor/id, so query by DOM
+      await renderPlayground();
       expect(screen.getByText('端点')).toBeInTheDocument();
-      const select = container.querySelector('select') as HTMLSelectElement;
-      expect(select).toBeInTheDocument();
-      expect(select.options).toHaveLength(3);
-      expect(select.options[0].textContent).toContain('/v1/chat/completions');
-      expect(select.options[1].textContent).toContain('/v1/messages');
-      expect(select.options[2].textContent).toContain('/v1/responses');
+      // Find the endpoint select (first select on the page)
+      const selects = screen.getAllByRole('combobox');
+      const endpointSelect = selects[0];
+      expect(endpointSelect).toBeInTheDocument();
+      const options = endpointSelect.querySelectorAll('option');
+      expect(options).toHaveLength(3);
+      expect(options[0].textContent).toContain('/v1/chat/completions');
+      expect(options[1].textContent).toContain('/v1/messages');
+      expect(options[2].textContent).toContain('/v1/responses');
     });
 
     it('defaults to chat completions endpoint', async () => {
-      const { container } = await renderPlayground();
-      const select = container.querySelector('select') as HTMLSelectElement;
-      expect(select.value).toBe('/v1/chat/completions');
+      await renderPlayground();
+      const selects = screen.getAllByRole('combobox');
+      const endpointSelect = selects[0] as HTMLSelectElement;
+      expect(endpointSelect.value).toBe('/v1/chat/completions');
     });
 
     it('allows changing endpoint', async () => {
-      const { container } = await renderPlayground();
-      const select = container.querySelector('select') as HTMLSelectElement;
-      fireEvent.change(select, { target: { value: '/v1/messages' } });
-      expect(select.value).toBe('/v1/messages');
+      await renderPlayground();
+      const selects = screen.getAllByRole('combobox');
+      const endpointSelect = selects[0] as HTMLSelectElement;
+      fireEvent.change(endpointSelect, { target: { value: '/v1/messages' } });
+      expect(endpointSelect.value).toBe('/v1/messages');
+    });
+  });
+
+  describe('Provider and Model selection', () => {
+    it('renders provider dropdown', async () => {
+      await renderPlayground();
+      // The provider select has the placeholder option "选择厂商..."
+      const selects = screen.getAllByRole('combobox');
+      // selects[0] = endpoint, selects[1] = provider, selects[2] = model (if visible)
+      const providerSelect = selects[1] as HTMLSelectElement;
+      expect(providerSelect).toBeInTheDocument();
+      // Should have placeholder + 2 providers
+      expect(providerSelect.options.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('shows model dropdown after selecting a provider', async () => {
+      await renderPlayground();
+      const selects = screen.getAllByRole('combobox');
+      const providerSelect = selects[1] as HTMLSelectElement;
+
+      // Select openai provider
+      fireEvent.change(providerSelect, { target: { value: 'openai' } });
+
+      // Model dropdown should now appear
+      await waitFor(() => {
+        const updatedSelects = screen.getAllByRole('combobox');
+        // endpoint + provider + model dropdown = at least 3
+        expect(updatedSelects.length).toBeGreaterThanOrEqual(3);
+      });
+    });
+
+    it('auto-selects first model when provider is chosen', async () => {
+      await renderPlayground();
+      const selects = screen.getAllByRole('combobox');
+      const providerSelect = selects[1] as HTMLSelectElement;
+
+      fireEvent.change(providerSelect, { target: { value: 'openai' } });
+
+      // The model input should be populated with openai/gpt-4o
+      await waitFor(() => {
+        const modelInput = screen.getByPlaceholderText('例如: openai/gpt-4o') as HTMLInputElement;
+        expect(modelInput.value).toBe('openai/gpt-4o');
+      });
     });
   });
 
