@@ -45,12 +45,15 @@ export function registerConfigRoutes(app: FastifyInstance, config: AppConfig): v
 
     const newConfig = sanitizeConfig(rawBody);
 
-    // Preserve existing api_key values if not provided in update
+    // Preserve existing api_key if not provided or still masked (***)
     const newProviders = newConfig.providers as Record<string, Record<string, unknown>> | undefined;
     if (newProviders) {
       for (const [key, p] of Object.entries(newProviders)) {
-        if (!p.api_key && config.providers[key]) {
-          p.api_key = config.providers[key].api_key;
+        const existingKey = config.providers[key]?.api_key;
+        if (!p.api_key || p.api_key === '***') {
+          if (existingKey) {
+            p.api_key = existingKey;
+          }
         }
       }
     }

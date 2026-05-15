@@ -36,7 +36,12 @@ export function registerProviderRoutes(app: FastifyInstance, config: AppConfig):
     if (!config.providers[key]) {
       return reply.status(404).send({ error: { message: `Provider "${key}" not found` } });
     }
-    config.providers[key] = request.body as ProviderConfig;
+    const updated = request.body as ProviderConfig;
+    // Preserve existing API key if sent value is masked or empty
+    if (!updated.api_key || updated.api_key === '***') {
+      updated.api_key = config.providers[key].api_key;
+    }
+    config.providers[key] = updated;
     writeConfig(CONFIG_PATH, config);
     return reply.send({ ok: true });
   });
