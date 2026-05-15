@@ -97,12 +97,12 @@ describe('Dashboard', () => {
 
       render(<Dashboard />);
 
+      // Wait for both the section title AND at least one provider name to appear
       await waitFor(() => {
         expect(screen.getByText('厂商状态')).toBeInTheDocument();
+        expect(screen.getByText('OpenAI')).toBeInTheDocument();
       });
 
-      // Provider names should be visible in the summary
-      expect(screen.getByText('OpenAI')).toBeInTheDocument();
       expect(screen.getByText('Anthropic')).toBeInTheDocument();
     });
   });
