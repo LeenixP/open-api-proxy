@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { apiClient } from '../api/client';
 import { Send, Loader2, Copy, Trash2, ArrowDown } from 'lucide-react';
-import { t } from '../i18n';
+import { useLocale } from '../i18n/LocaleContext';
+import type { PlaygroundContext } from '../App';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
 
 const ENDPOINT_PROTOCOLS: Record<string, string> = {
   '/v1/chat/completions': 'OpenAI Chat',
@@ -43,7 +47,13 @@ interface ConversionInfo {
   conversionEnabled: boolean;
 }
 
-export default function Playground() {
+interface PlaygroundProps {
+  initialContext?: PlaygroundContext | null;
+  onContextConsumed?: () => void;
+}
+
+export default function Playground({ initialContext, onContextConsumed }: PlaygroundProps) {
+  const { t } = useLocale();
   const [endpoint, setEndpoint] = useState('/v1/chat/completions');
   const [model, setModel] = useState('');
   const [selectedProviderKey, setSelectedProviderKey] = useState('');
@@ -68,6 +78,18 @@ export default function Playground() {
       setModels(data.data?.map((m: any) => m.id) || []);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (initialContext && Object.keys(providers).length > 0) {
+      setSelectedProviderKey(initialContext.providerKey);
+      setModel(initialContext.model);
+      const slashIdx = initialContext.model.indexOf('/');
+      if (slashIdx > 0) {
+        setSelectedModelName(initialContext.model.substring(slashIdx + 1));
+      }
+      onContextConsumed?.();
+    }
+  }, [initialContext, providers]);
 
   useEffect(() => {
     if (responseRef.current) responseRef.current.scrollTop = responseRef.current.scrollHeight;
@@ -128,11 +150,26 @@ export default function Playground() {
     };
   }, [endpoint, model, selectedProviderKey, providers, config]);
 
+  const [selectedModelName, setSelectedModelName] = useState('');
+
   const handleProviderChange = (providerKey: string) => {
     setSelectedProviderKey(providerKey);
+    setSelectedModelName('');
+    if (providerKey && providers[providerKey]) {
+      const providerModels = providers[providerKey].models || [];
+      if (providerModels.length > 0) {
+        setSelectedModelName(providerModels[0]);
+        setModel(`${providerKey}/${providerModels[0]}`);
+      } else {
+        setModel(providerKey + '/');
+      }
+    } else {
+      setModel('');
+    }
   };
 
   const handleModelDropdownChange = (modelName: string) => {
+    setSelectedModelName(modelName);
     if (selectedProviderKey && modelName) {
       setModel(`${selectedProviderKey}/${modelName}`);
     }
@@ -145,6 +182,7 @@ export default function Playground() {
       const pKey = value.substring(0, slashIdx);
       if (providers[pKey]) {
         setSelectedProviderKey(pKey);
+        setSelectedModelName(value.substring(slashIdx + 1));
       }
     }
   };
@@ -171,22 +209,42 @@ export default function Playground() {
     setResponse('');
     setResponseIsError(false);
 
-    const body: any = {
-      model,
-      messages: [
-        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-        { role: 'user', content: userMessage },
-      ],
-      stream,
-      temperature,
-    };
+    let body: any;
 
-    if (endpoint === '/v1/chat/completions') {
-      body.max_completion_tokens = maxTokens;
-    } else if (endpoint === '/v1/messages') {
-      body.max_tokens = maxTokens;
+    if (endpoint === '/v1/messages') {
+      // Anthropic Messages API: system is a top-level field, not in messages array
+      body = {
+        model,
+        messages: [{ role: 'user', content: userMessage }],
+        stream,
+        max_tokens: maxTokens,
+      };
+      if (systemPrompt) {
+        body.system = systemPrompt;
+      }
     } else if (endpoint === '/v1/responses') {
-      body.max_output_tokens = maxTokens;
+      // OpenAI Responses API: uses `input` instead of `messages`
+      body = {
+        model,
+        input: userMessage,
+        stream,
+        max_output_tokens: maxTokens,
+      };
+      if (systemPrompt) {
+        body.instructions = systemPrompt;
+      }
+    } else {
+      // OpenAI Chat Completions API
+      body = {
+        model,
+        messages: [
+          ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+          { role: 'user', content: userMessage },
+        ],
+        stream,
+        temperature,
+        max_completion_tokens: maxTokens,
+      };
     }
 
     try {
@@ -221,7 +279,8 @@ export default function Playground() {
                 const content = chunk.choices?.[0]?.delta?.content ||
                   chunk.delta?.text ||
                   chunk.content?.[0]?.text ||
-                  (chunk.type === 'content_block_delta' ? chunk.delta?.text : '');
+                  (chunk.type === 'content_block_delta' ? chunk.delta?.text : '') ||
+                  (chunk.type === 'response.output_text.delta' ? chunk.delta : '');
                 if (content) setResponse((prev) => prev + content);
               } catch {}
             }
@@ -255,7 +314,8 @@ export default function Playground() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">{t('playground.title')}</h2>
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{t('playground.title')}</h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{t('playground.helperText')}</p>
 
       {/* Conversion Path Panel */}
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 mb-6">
@@ -319,57 +379,57 @@ export default function Playground() {
         {/* Left Column: Form */}
         <div className="space-y-4">
           {/* Endpoint Selector */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.endpoint')}</label>
-            <select value={endpoint} onChange={(e) => setEndpoint(e.target.value)} className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
-              <option value="/v1/chat/completions">/v1/chat/completions (OpenAI Chat)</option>
-              <option value="/v1/messages">/v1/messages (Anthropic Messages)</option>
-              <option value="/v1/responses">/v1/responses (OpenAI Responses)</option>
-            </select>
-          </div>
+          <Select
+            id="endpoint"
+            label={t('playground.endpoint')}
+            value={endpoint}
+            onChange={(e) => setEndpoint(e.target.value)}
+          >
+            <option value="/v1/chat/completions">/v1/chat/completions (OpenAI Chat)</option>
+            <option value="/v1/messages">/v1/messages (Anthropic Messages)</option>
+            <option value="/v1/responses">/v1/responses (OpenAI Responses)</option>
+          </Select>
 
           {/* Provider Selector */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.selectProvider')}</label>
-            <select
-              value={selectedProviderKey}
-              onChange={(e) => handleProviderChange(e.target.value)}
-              className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-            >
-              <option value="">{t('playground.selectProvider')}</option>
-              {Object.entries(providers).map(([key, p]) => (
-                <option key={key} value={key}>{p.display_name || key} ({key})</option>
-              ))}
-            </select>
-          </div>
+          <Select
+            id="provider"
+            label={t('playground.selectProvider')}
+            value={selectedProviderKey}
+            onChange={(e) => handleProviderChange(e.target.value)}
+          >
+            <option value="">{t('playground.selectProvider')}</option>
+            {Object.entries(providers).map(([key, p]) => (
+              <option key={key} value={key}>{p.display_name || key} ({key})</option>
+            ))}
+          </Select>
 
           {/* Model Dropdown (when provider is selected and has models) */}
           {selectedProviderModels.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.selectModel')}</label>
-              <select
-                onChange={(e) => handleModelDropdownChange(e.target.value)}
-                value=""
-                className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              >
-                <option value="">{t('playground.selectModel')}</option>
-                {selectedProviderModels.map((m: string) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
+            <Select
+              id="model-dropdown"
+              label={t('playground.selectModel')}
+              onChange={(e) => handleModelDropdownChange(e.target.value)}
+              value={selectedModelName}
+            >
+              <option value="">{t('playground.selectModel')}</option>
+              {selectedProviderModels.map((m: string) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </Select>
           )}
 
           {/* Model Input */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.model')}</label>
-            <input value={model} onChange={(e) => handleModelChange(e.target.value)}
-              className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              placeholder={t('playground.modelPlaceholder')} list="model-list" />
-            <datalist id="model-list">
-              {models.map((m) => <option key={m} value={m} />)}
-            </datalist>
-          </div>
+          <Input
+            id="model-input"
+            label={t('playground.model')}
+            value={model}
+            onChange={(e) => handleModelChange(e.target.value)}
+            placeholder={t('playground.modelPlaceholder')}
+            list="model-list"
+          />
+          <datalist id="model-list">
+            {models.map((m) => <option key={m} value={m} />)}
+          </datalist>
 
           {/* System Prompt */}
           <div>
@@ -382,19 +442,24 @@ export default function Playground() {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.userMessage')}</label>
             <textarea value={userMessage} onChange={(e) => setUserMessage(e.target.value)} rows={4}
+              onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleSend(); } }}
               className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white" placeholder={t('playground.userMessagePlaceholder')} />
           </div>
 
           {/* Temperature + Max Tokens */}
           <div className="flex gap-4">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.temperatureLabel', { value: temperature })}</label>
-              <input type="range" min="0" max="2" step="0.1" value={temperature} onChange={(e) => setTemperature(parseFloat(e.target.value))} className="w-full" />
+              <label htmlFor="temperature" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.temperatureLabel', { value: temperature })}</label>
+              <input id="temperature" type="range" min="0" max="2" step="0.1" value={temperature} onChange={(e) => setTemperature(parseFloat(e.target.value))} className="w-full" />
             </div>
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('playground.maxTokens')}</label>
-              <input type="number" value={maxTokens} onChange={(e) => setMaxTokens(parseInt(e.target.value))}
-                className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
+              <Input
+                id="max-tokens"
+                label={t('playground.maxTokens')}
+                type="number"
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+              />
             </div>
           </div>
 
@@ -403,11 +468,10 @@ export default function Playground() {
             <input type="checkbox" checked={stream} onChange={(e) => setStream(e.target.checked)} id="stream" />
             <label htmlFor="stream" className="text-sm text-gray-700 dark:text-gray-300">{t('playground.stream')}</label>
           </div>
-          <button onClick={handleSend} disabled={loading || !model || !userMessage}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50">
+          <Button onClick={handleSend} disabled={loading || !model || !userMessage}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             {loading ? t('playground.sending') : t('playground.send')}
-          </button>
+          </Button>
         </div>
 
         {/* Right Column: Response Panel */}

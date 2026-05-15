@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
-import { X } from 'lucide-react';
-import { t } from '../i18n';
+import { X, Check } from 'lucide-react';
+import { useLocale } from '../i18n/LocaleContext';
+import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
+import Button from '../components/ui/Button';
 
 export default function Settings() {
+  const { t } = useLocale();
   const [config, setConfig] = useState<any>(null);
   const [saved, setSaved] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<any>(null);
@@ -59,7 +63,23 @@ export default function Settings() {
     reader.readAsText(file);
   };
 
-  if (!config) return <div className="text-gray-400">{t('settings.loading')}</div>;
+  if (!config) return (
+    <div className="animate-pulse">
+      <div className="h-7 w-40 bg-gray-200 dark:bg-gray-700 rounded mb-6" />
+      <div className="space-y-6 max-w-2xl">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+            <div className="h-5 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-3" />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="h-9 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+              <div className="h-9 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+            </div>
+          </div>
+        ))}
+        <div className="h-10 w-24 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+      </div>
+    </div>
+  );
 
   return (
     <div>
@@ -80,41 +100,39 @@ export default function Settings() {
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
           <h3 className="font-medium text-gray-900 dark:text-white mb-3">{t('settings.server')}</h3>
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">{t('settings.port')}</label>
-              <input type="number" value={config.server?.port || 6312}
-                onChange={(e) => setConfig({ ...config, server: { ...config.server, port: parseInt(e.target.value) || 6312 } })}
-                className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">{t('settings.host')}</label>
-              <input value={config.server?.host || '0.0.0.0'}
-                onChange={(e) => setConfig({ ...config, server: { ...config.server, host: e.target.value } })}
-                className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
-            </div>
+            <Input
+              label={t('settings.port')}
+              type="number"
+              value={config.server?.port || 6312}
+              onChange={(e) => setConfig({ ...config, server: { ...config.server, port: parseInt(e.target.value) || 6312 } })}
+            />
+            <Input
+              label={t('settings.host')}
+              value={config.server?.host || '0.0.0.0'}
+              onChange={(e) => setConfig({ ...config, server: { ...config.server, host: e.target.value } })}
+            />
           </div>
         </section>
 
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
           <h3 className="font-medium text-gray-900 dark:text-white mb-3">{t('settings.proxy')}</h3>
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">{t('settings.timeout')}</label>
-              <input type="number" value={config.proxy?.timeout || 120000}
-                onChange={(e) => setConfig({ ...config, proxy: { ...config.proxy, timeout: parseInt(e.target.value) || 120000 } })}
-                className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">{t('settings.logLevel')}</label>
-              <select value={config.logging?.level || 'info'}
-                onChange={(e) => setConfig({ ...config, logging: { ...config.logging, level: e.target.value } })}
-                className="w-full border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
-                <option value="debug">debug</option>
-                <option value="info">info</option>
-                <option value="warn">warn</option>
-                <option value="error">error</option>
-              </select>
-            </div>
+            <Input
+              label={t('settings.timeout')}
+              type="number"
+              value={config.proxy?.timeout || 120000}
+              onChange={(e) => setConfig({ ...config, proxy: { ...config.proxy, timeout: parseInt(e.target.value) || 120000 } })}
+            />
+            <Select
+              label={t('settings.logLevel')}
+              value={config.logging?.level || 'info'}
+              onChange={(e) => setConfig({ ...config, logging: { ...config.logging, level: e.target.value } })}
+            >
+              <option value="debug">debug</option>
+              <option value="info">info</option>
+              <option value="warn">warn</option>
+              <option value="error">error</option>
+            </Select>
           </div>
         </section>
 
@@ -156,10 +174,10 @@ export default function Settings() {
         <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
           <h3 className="font-medium text-gray-900 dark:text-white mb-3">{t('settings.importExport')}</h3>
           <div className="flex gap-3">
-            <button onClick={handleExport} className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700">
+            <Button variant="secondary" onClick={handleExport}>
               {t('settings.export')}
-            </button>
-            <label className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer">
+            </Button>
+            <label className="inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-colors px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer">
               {t('settings.import')}
               <input type="file" accept=".json,.yaml" onChange={handleImport} className="hidden" />
             </label>
@@ -167,9 +185,9 @@ export default function Settings() {
           <p className="text-xs text-gray-500 mt-2">{t('settings.importExportHint')}</p>
         </section>
 
-        <button onClick={handleSave} className="bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm hover:bg-indigo-700">
-          {saved ? `✓ ${t('settings.saved')}` : t('settings.save')}
-        </button>
+        <Button onClick={handleSave}>
+          {saved ? <><Check className="w-4 h-4 inline-block" /> {t('settings.saved')}</> : t('settings.save')}
+        </Button>
       </div>
     </div>
   );

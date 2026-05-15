@@ -1,12 +1,17 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
-import { Server, Box, Activity, Heart, Plus, Play, Download, Check } from 'lucide-react';
-import { t } from '../i18n/index';
+import { Server, Box, Activity, Heart, Plus, Play, Download, Check, Zap, ArrowRight } from 'lucide-react';
+import { useLocale } from '../i18n/LocaleContext';
+import Badge from '../components/ui/Badge';
+import Button from '../components/ui/Button';
+import type { PlaygroundContext } from '../App';
 
 type Page = 'dashboard' | 'providers' | 'playground' | 'logs' | 'settings';
 
 interface DashboardProps {
   onNavigate?: (page: Page) => void;
+  onTestProvider?: (ctx: PlaygroundContext) => void;
+  onAddProvider?: () => void;
 }
 
 interface ProviderData {
@@ -32,7 +37,8 @@ interface PresetItem {
   models: string[];
 }
 
-export default function Dashboard({ onNavigate }: DashboardProps) {
+export default function Dashboard({ onNavigate, onTestProvider, onAddProvider }: DashboardProps) {
+  const { t } = useLocale();
   const [providers, setProviders] = useState<Record<string, ProviderData>>({});
   const [health, setHealth] = useState<{ uptime: number; providers: Record<string, ProviderHealth> }>({ uptime: 0, providers: {} });
   const [models, setModels] = useState<Array<{ id: string }>>([]);
@@ -85,7 +91,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             <StatCard icon={Server} label={t('dashboard.providers')} value={providerCount} />
             <StatCard icon={Box} label={t('dashboard.models')} value={modelCount} />
             <StatCard icon={Activity} label={t('dashboard.uptime')} value={formatUptime(health.uptime || 0)} />
-            <StatCard icon={Heart} label={t('dashboard.healthyCount', { healthy: healthyCount, total: providerCount })} value={`${healthyCount}/${providerCount}`} />
+            <StatCard icon={Heart} label={t('dashboard.status')} value={`${healthyCount}/${providerCount}`} />
           </>
         )}
       </div>
@@ -95,20 +101,55 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         <EmptyState onNavigate={onNavigate} onImported={load} />
       )}
 
-      {/* Section 2: Models Overview */}
+      {/* Section 2: Provider Health Overview (compact) */}
       {!loading && providerCount > 0 && (
         <section className="mb-8">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">{t('dashboard.modelOverview')}</h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {Object.entries(providers).map(([key, p]) => (
-              <ProviderModelCard
-                key={key}
-                providerKey={key}
-                provider={p}
-                health={health.providers?.[key]}
-              />
-            ))}
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">{t('dashboard.status')}</h3>
+            <button
+              onClick={() => onNavigate?.('providers')}
+              className="inline-flex items-center gap-1 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+            >
+              {t('dashboard.viewAll')}
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Object.entries(providers).slice(0, 6).map(([key, p]) => {
+              const ph = health.providers?.[key];
+              const isHealthy = ph?.healthy;
+              const healthBadgeColor = ph === undefined ? 'gray' : isHealthy ? 'green' : 'red';
+              const healthLabel = isHealthy ? 'Healthy' : ph ? 'Down' : 'Unknown';
+              const modelCount2 = p.models?.length || 0;
+              return (
+                <div key={key} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium text-sm text-gray-900 dark:text-white truncate">{p.display_name || key}</span>
+                    <Badge color={healthBadgeColor}>{healthLabel}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-gray-400">{t('dashboard.modelsCount', { count: modelCount2 })}</span>
+                    <button
+                      onClick={() => {
+                        const firstModel = p.models?.[0] || '';
+                        onTestProvider?.({ providerKey: key, model: firstModel ? `${key}/${firstModel}` : key + '/' });
+                      }}
+                      className="text-gray-400 hover:text-emerald-500 p-1 rounded"
+                      aria-label={t('dashboard.testProvider', { name: p.display_name || key })}
+                      title={t('dashboard.testProvider', { name: p.display_name || key })}
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {providerCount > 6 && (
+            <p className="mt-2 text-xs text-gray-400">
+              {t('dashboard.andMore', { count: providerCount - 6 })}
+            </p>
+          )}
         </section>
       )}
 
@@ -117,20 +158,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         <section>
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">{t('dashboard.quickActions')}</h3>
           <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => onNavigate?.('providers')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
-            >
+            <Button onClick={() => onAddProvider?.()}>
               <Plus className="w-4 h-4" />
               {t('dashboard.addProvider')}
-            </button>
-            <button
-              onClick={() => onNavigate?.('playground')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
+            </Button>
+            <Button variant="secondary" onClick={() => onNavigate?.('playground')}>
               <Play className="w-4 h-4" />
               {t('dashboard.apiTest')}
-            </button>
+            </Button>
           </div>
         </section>
       )}
@@ -166,52 +201,12 @@ function StatCard({ icon: Icon, label, value }: { icon: React.ComponentType<{ cl
   );
 }
 
-function ProviderModelCard({ providerKey, provider, health }: { providerKey: string; provider: ProviderData; health?: ProviderHealth }) {
-  const models = provider.models || [];
-  const isHealthy = health?.healthy;
-  const healthColor = health === undefined ? 'bg-gray-300' : isHealthy ? 'bg-green-500' : 'bg-red-500';
-
-  return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="font-semibold text-gray-900 dark:text-white truncate">{provider.display_name || providerKey}</span>
-          <span className="shrink-0 text-xs px-1.5 py-0.5 rounded font-mono bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
-            {provider.protocol}
-          </span>
-        </div>
-        <span className={`shrink-0 ml-2 w-2.5 h-2.5 rounded-full ${healthColor}`} title={isHealthy ? 'Healthy' : health ? 'Unhealthy' : 'Unknown'} />
-      </div>
-
-      {/* Models as chips */}
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {models.map((m) => (
-          <span
-            key={m}
-            className="inline-flex px-2 py-0.5 rounded-md text-xs font-mono bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
-          >
-            {m}
-          </span>
-        ))}
-        {models.length === 0 && (
-          <span className="text-xs text-gray-400 dark:text-gray-500 italic">{t('dashboard.noModels')}</span>
-        )}
-      </div>
-
-      {/* Footer: model count */}
-      <p className="text-xs text-gray-400 dark:text-gray-500">
-        {t('dashboard.modelsCount', { count: models.length })}
-      </p>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 /* Empty State                                                         */
 /* ------------------------------------------------------------------ */
 
 function EmptyState({ onNavigate, onImported }: { onNavigate?: (page: Page) => void; onImported: () => void }) {
+  const { t } = useLocale();
   const [presets, setPresets] = useState<Record<string, PresetItem>>({});
   const [presetsLoading, setPresetsLoading] = useState(true);
   const [importingKey, setImportingKey] = useState<string | null>(null);
@@ -245,13 +240,10 @@ function EmptyState({ onNavigate, onImported }: { onNavigate?: (page: Page) => v
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{t('dashboard.emptyTitle')}</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">{t('dashboard.emptyDesc')}</p>
         <div className="mt-4">
-          <button
-            onClick={() => onNavigate?.('providers')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
+          <Button onClick={() => onNavigate?.('providers')}>
             <Plus className="w-4 h-4" />
             {t('dashboard.addManually')}
-          </button>
+          </Button>
         </div>
       </div>
 
