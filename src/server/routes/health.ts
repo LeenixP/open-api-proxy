@@ -19,4 +19,16 @@ export function registerHealthRoute(app: FastifyInstance, config: AppConfig): vo
       providers: healthChecker.getStatus(),
     });
   });
+
+  // Graceful shutdown endpoint for port conflict resolution.
+  // The new instance sends a POST here to ask the old instance to shut down.
+  app.post('/api/shutdown', async (_request, reply) => {
+    reply.send({ ok: true, message: 'Shutting down...' });
+    // Graceful shutdown after response is sent
+    setTimeout(async () => {
+      console.log('Shutdown requested by new instance');
+      await app.close();
+      process.exit(0);
+    }, 100);
+  });
 }

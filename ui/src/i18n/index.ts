@@ -115,6 +115,9 @@ const messages: Record<Locale, Record<string, string>> = {
     'update.confirm': '确认升级到 {version}？服务将自动重启。',
     'update.upgrading': '升级中...',
     'update.upgrade': '立即升级',
+    'update.authRequired': '请输入 MANAGEMENT_API_KEY 以执行升级:',
+    'update.authPlaceholder': '输入管理密钥...',
+    'update.success': '升级命令已执行，服务即将重启...',
 
     // Common
     'common.retry': '重试',
@@ -231,6 +234,9 @@ const messages: Record<Locale, Record<string, string>> = {
     'update.confirm': 'Confirm upgrade to {version}? Service will restart.',
     'update.upgrading': 'Upgrading...',
     'update.upgrade': 'Upgrade Now',
+    'update.authRequired': 'Enter MANAGEMENT_API_KEY to upgrade:',
+    'update.authPlaceholder': 'Enter management key...',
+    'update.success': 'Update command executed, server will restart shortly...',
 
     'common.retry': 'Retry',
     'common.close': 'Close',

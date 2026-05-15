@@ -22,6 +22,10 @@ export const apiClient = {
   getHealth: () => api<any>('/api/health'),
   getLogs: () => api<any[]>('/api/logs'),
   checkUpdate: () => api<{ current: string; latest: string; hasUpdate: boolean }>('/api/update/check'),
-  executeUpdate: () => api<any>('/api/update/execute', { method: 'POST' }),
+  executeUpdate: (authToken?: string) => {
+    const headers: Record<string, string> = {};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    return api<any>('/api/update/execute', { method: 'POST', headers });
+  },
   getModels: () => api<{ object: string; data: Array<{ id: string }> }>('/v1/models'),
 };

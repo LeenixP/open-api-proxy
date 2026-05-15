@@ -1,15 +1,69 @@
 import { loadConfig } from './config/loader.js';
 import { createApp } from './server/app.js';
 import { registerAllConverters } from './converters/index.js';
-import { runMigrations } from './migrations/registry.js';
+import { runMigrations, syncConfigKeys } from './migrations/registry.js';
+import type { FastifyInstance } from 'fastify';
 import path from 'path';
 
 const CONFIG_PATH = process.env.CONFIG_PATH || path.resolve(process.cwd(), 'config.yaml');
 
+async function tryTakeover(port: number): Promise<boolean> {
+  try {
+    // Check if existing process is open-api-proxy via health endpoint
+    const healthRes = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!healthRes.ok) return false;
+
+    const health = (await healthRes.json()) as { status?: string };
+    if (health.status !== 'ok') return false;
+
+    // It's an open-api-proxy instance - shut it down
+    console.log('Found existing open-api-proxy instance. Shutting it down...');
+    await fetch(`http://127.0.0.1:${port}/api/shutdown`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(5000),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function listenWithConflictResolution(
+  app: FastifyInstance,
+  port: number,
+  host: string,
+): Promise<void> {
+  const maxRetries = 3;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      await app.listen({ port, host });
+      return; // Success
+    } catch (err) {
+      const error = err as NodeJS.ErrnoException;
+      if (error.code === 'EADDRINUSE' && attempt < maxRetries - 1) {
+        console.log(`Port ${port} is in use. Checking if existing process is open-api-proxy...`);
+        const takenOver = await tryTakeover(port);
+        if (takenOver) {
+          console.log('Previous instance shut down. Retrying...');
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          continue; // Retry
+        }
+        console.error(`Port ${port} is in use by another application.`);
+      }
+      throw err;
+    }
+  }
+}
+
 async function main(): Promise<void> {
   console.log('open-api-proxy v0.1.0 starting...');
   await runMigrations(CONFIG_PATH);
-  const config = loadConfig(CONFIG_PATH);
+  let config = loadConfig(CONFIG_PATH);
+  const syncResult = syncConfigKeys(config, CONFIG_PATH);
+  config = syncResult.config;
   console.log(`Loaded ${Object.keys(config.providers).length} providers`);
 
   // Security warnings
@@ -29,7 +83,7 @@ async function main(): Promise<void> {
   console.log('Protocol converters registered');
   const app = await createApp(config);
   const { port, host } = config.server;
-  await app.listen({ port, host });
+  await listenWithConflictResolution(app, port, host);
   console.log(`open-api-proxy running at http://${host}:${port}`);
 
   // Graceful shutdown

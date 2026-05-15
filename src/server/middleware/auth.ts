@@ -10,6 +10,10 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   // If no API key is configured, allow all (local-only mode)
   if (!apiKey) return;
 
+  // Allow localhost without auth for health checks and shutdown takeover
+  const ip = request.ip;
+  if (ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return;
+
   // Check Authorization header
   const auth = request.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) {
