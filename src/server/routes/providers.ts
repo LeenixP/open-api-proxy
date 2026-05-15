@@ -5,17 +5,9 @@ import path from 'path';
 
 const CONFIG_PATH = process.env.CONFIG_PATH || path.resolve(process.cwd(), 'config.yaml');
 
-function stripProviderApiKeys(providers: Record<string, ProviderConfig>): Record<string, unknown> {
-  const safe: Record<string, unknown> = {};
-  for (const [key, p] of Object.entries(providers)) {
-    safe[key] = { ...p, api_key: p.api_key ? '***' : '' };
-  }
-  return safe;
-}
-
 export function registerProviderRoutes(app: FastifyInstance, config: AppConfig): void {
   app.get('/api/providers', async (_request, reply) => {
-    reply.send(stripProviderApiKeys(config.providers));
+    reply.send(config.providers);
   });
 
   app.post('/api/providers', async (request, reply) => {
@@ -37,8 +29,8 @@ export function registerProviderRoutes(app: FastifyInstance, config: AppConfig):
       return reply.status(404).send({ error: { message: `Provider "${key}" not found` } });
     }
     const updated = request.body as ProviderConfig;
-    // Preserve existing API key if sent value is masked or empty
-    if (!updated.api_key || updated.api_key === '***') {
+    // Preserve existing API key if not provided
+    if (!updated.api_key && config.providers[key].api_key) {
       updated.api_key = config.providers[key].api_key;
     }
     config.providers[key] = updated;
