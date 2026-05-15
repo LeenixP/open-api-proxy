@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { apiClient } from '../api/client';
-import { Send, Loader2, Copy, Trash2, ArrowDown } from 'lucide-react';
+import { Send, Loader2, Copy, Trash2, ArrowDown, Square } from 'lucide-react';
 import { useLocale } from '../i18n/LocaleContext';
 import type { PlaygroundContext } from '../App';
 import Button from '../components/ui/Button';
@@ -69,7 +69,10 @@ export default function Playground({ initialContext, onContextConsumed }: Playgr
   const [models, setModels] = useState<string[]>([]);
   const [providers, setProviders] = useState<Record<string, any>>({});
   const [config, setConfig] = useState<any>(null);
+  const [selectedModelName, setSelectedModelName] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
   const responseRef = useRef<HTMLPreElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     apiClient.getProviders().then(setProviders).catch(() => {});
@@ -81,12 +84,17 @@ export default function Playground({ initialContext, onContextConsumed }: Playgr
 
   useEffect(() => {
     if (initialContext && Object.keys(providers).length > 0) {
-      setSelectedProviderKey(initialContext.providerKey);
-      setModel(initialContext.model);
+      let pKey = initialContext.providerKey || '';
       const slashIdx = initialContext.model.indexOf('/');
       if (slashIdx > 0) {
+        const parsed = initialContext.model.substring(0, slashIdx);
+        if (providers[parsed]) {
+          pKey = parsed;
+        }
         setSelectedModelName(initialContext.model.substring(slashIdx + 1));
       }
+      if (pKey) setSelectedProviderKey(pKey);
+      setModel(initialContext.model);
       onContextConsumed?.();
     }
   }, [initialContext, providers]);
@@ -150,8 +158,6 @@ export default function Playground({ initialContext, onContextConsumed }: Playgr
     };
   }, [endpoint, model, selectedProviderKey, providers, config]);
 
-  const [selectedModelName, setSelectedModelName] = useState('');
-
   const handleProviderChange = (providerKey: string) => {
     setSelectedProviderKey(providerKey);
     setSelectedModelName('');
@@ -208,6 +214,10 @@ export default function Playground({ initialContext, onContextConsumed }: Playgr
     setLoading(true);
     setResponse('');
     setResponseIsError(false);
+    setIsStreaming(false);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     let body: any;
 
@@ -222,6 +232,7 @@ export default function Playground({ initialContext, onContextConsumed }: Playgr
       if (systemPrompt) {
         body.system = systemPrompt;
       }
+      body.temperature = temperature;
     } else if (endpoint === '/v1/responses') {
       // OpenAI Responses API: uses `input` instead of `messages`
       body = {
@@ -233,6 +244,7 @@ export default function Playground({ initialContext, onContextConsumed }: Playgr
       if (systemPrompt) {
         body.instructions = systemPrompt;
       }
+      body.temperature = temperature;
     } else {
       // OpenAI Chat Completions API
       body = {
@@ -252,6 +264,7 @@ export default function Playground({ initialContext, onContextConsumed }: Playgr
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: abortController.signal,
       });
 
       if (!res.ok) {
@@ -259,10 +272,12 @@ export default function Playground({ initialContext, onContextConsumed }: Playgr
         setResponse(formatErrorMessage(res.status, errText));
         setResponseIsError(true);
         setLoading(false);
+        setIsStreaming(false);
         return;
       }
 
       if (stream && res.body) {
+        setIsStreaming(true);
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
@@ -291,10 +306,16 @@ export default function Playground({ initialContext, onContextConsumed }: Playgr
         setResponse(JSON.stringify(data, null, 2));
       }
     } catch (err: any) {
-      setResponse(`Error: ${err.message}`);
-      setResponseIsError(true);
+      if (err.name === 'AbortError') {
+        // User cancelled - keep whatever response we have so far
+      } else {
+        setResponse(t('playground.errorGeneric', { message: err.message }));
+        setResponseIsError(true);
+      }
     }
     setLoading(false);
+    setIsStreaming(false);
+    abortControllerRef.current = null;
   };
 
   const handleCopy = () => {
@@ -306,6 +327,10 @@ export default function Playground({ initialContext, onContextConsumed }: Playgr
   const handleClear = () => {
     setResponse('');
     setResponseIsError(false);
+  };
+
+  const handleStop = () => {
+    abortControllerRef.current?.abort();
   };
 
   const selectedProviderModels: string[] = selectedProviderKey && providers[selectedProviderKey]
@@ -479,7 +504,7 @@ export default function Playground({ initialContext, onContextConsumed }: Playgr
           <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('playground.responseTitle')}</span>
-              {loading && stream && (
+              {isStreaming && (
                 <span className="flex items-center gap-1 text-xs text-indigo-500">
                   <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
                   {t('playground.streaming')}
@@ -493,6 +518,15 @@ export default function Playground({ initialContext, onContextConsumed }: Playgr
               )}
             </div>
             <div className="flex gap-1">
+              {isStreaming && (
+                <button
+                  onClick={handleStop}
+                  className="p-1 text-red-400 hover:text-red-600 rounded"
+                  aria-label="Stop streaming"
+                >
+                  <Square className="w-4 h-4" />
+                </button>
+              )}
               <button
                 onClick={handleCopy}
                 disabled={!response}
