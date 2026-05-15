@@ -79,10 +79,10 @@ export function registerUpdateRoutes(app: FastifyInstance): void {
             });
           }
           console.log('Update complete. Restarting...');
+          process.exit(0);
         } catch (err) {
           console.error('Update failed:', (err as Error).message);
         }
-        process.exit(0);
       }, 1000);
     } catch (err) {
       reply.status(500).send({ error: { message: (err as Error).message } });

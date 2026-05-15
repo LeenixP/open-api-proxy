@@ -10,6 +10,7 @@ import { findFailover } from '../../proxy/failover.js';
 export function registerProxyRoutes(app: FastifyInstance, config: AppConfig): void {
   async function handleProxy(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     let route: RouteInfo | undefined;
+    let effectiveProviderKey: string | undefined;
     try {
       const body = (request.body || {}) as Record<string, unknown>;
       const modelField = body.model as string;
@@ -17,6 +18,7 @@ export function registerProxyRoutes(app: FastifyInstance, config: AppConfig): vo
       const endpointPath = request.url.split('?')[0];
 
       route = resolveRoute(config, modelField, endpointPath, stream);
+      effectiveProviderKey = route.providerKey;
 
       // Health check + failover
       let effectiveRoute: RouteInfo = route;
@@ -28,6 +30,7 @@ export function registerProxyRoutes(app: FastifyInstance, config: AppConfig): vo
             providerKey: failover.providerKey,
             provider: failover.provider,
           };
+          effectiveProviderKey = failover.providerKey;
           reply.header('X-Failover', 'true');
         }
       }
@@ -54,7 +57,7 @@ export function registerProxyRoutes(app: FastifyInstance, config: AppConfig): vo
       });
 
       if (!response.ok) {
-        healthChecker.recordFailure(route.providerKey);
+        healthChecker.recordFailure(effectiveProviderKey!);
         const errText = await response.text();
         const converter = ConverterRegistry.get(effectiveRoute.sourceProtocol, effectiveRoute.targetProtocol);
         const mapped = converter
@@ -75,7 +78,7 @@ export function registerProxyRoutes(app: FastifyInstance, config: AppConfig): vo
         return;
       }
 
-      healthChecker.recordSuccess(route.providerKey);
+      healthChecker.recordSuccess(effectiveProviderKey!);
 
       if (stream) {
         await proxyStreamToClient(response, effectiveRoute, reply);
@@ -96,20 +99,11 @@ export function registerProxyRoutes(app: FastifyInstance, config: AppConfig): vo
       );
       reply.headers(respHeaders).send(responseBody);
     } catch (err) {
-      if (route) {
-        healthChecker.recordFailure(route.providerKey);
+      if (effectiveProviderKey) {
+        healthChecker.recordFailure(effectiveProviderKey);
       }
       const message = (err as Error).message;
-      let status = 502;
-      if (message.startsWith('Invalid model format') || message.startsWith('Model name required')) {
-        status = 400;
-      } else if (message.startsWith('Provider "') && message.includes('not found')) {
-        status = 404;
-      } else if (message.startsWith('Model "') && message.includes('not found')) {
-        status = 404;
-      } else if (message === 'Unknown endpoint path') {
-        status = 404;
-      }
+      const status = (err as { statusCode?: number }).statusCode || 502;
       reply.status(status).send({ error: { message, type: 'proxy_error' } });
     }
   }
