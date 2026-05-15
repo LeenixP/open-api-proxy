@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
-import { t } from '../i18n';
+import { useLocale } from '../i18n/LocaleContext';
 
 export default function UpdateBanner() {
+  const { t } = useLocale();
   const [update, setUpdate] = useState<{ current: string; latest: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
