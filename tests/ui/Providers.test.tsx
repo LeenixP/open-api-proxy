@@ -52,7 +52,7 @@ describe('Providers', () => {
       renderWithLocale(<Providers />);
 
       await waitFor(() => {
-        expect(screen.getByText('暂无厂商，点击"添加厂商"开始')).toBeInTheDocument();
+        expect(screen.getByText('欢迎使用 open-api-proxy！')).toBeInTheDocument();
       });
     });
   });
@@ -162,10 +162,10 @@ describe('Providers', () => {
       renderWithLocale(<Providers />);
 
       await waitFor(() => {
-        expect(screen.getByText('暂无厂商，点击"添加厂商"开始')).toBeInTheDocument();
+        expect(screen.getByText('手动添加')).toBeInTheDocument();
       });
 
-      const addButton = screen.getByText('添加厂商');
+      const addButton = screen.getByText('手动添加');
       fireEvent.click(addButton);
 
       // ProviderEditor modal should be visible
@@ -179,10 +179,10 @@ describe('Providers', () => {
       renderWithLocale(<Providers />);
 
       await waitFor(() => {
-        expect(screen.getByText('暂无厂商，点击"添加厂商"开始')).toBeInTheDocument();
+        expect(screen.getByText('手动添加')).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByText('添加厂商'));
+      fireEvent.click(screen.getByText('手动添加'));
       expect(screen.getByRole('dialog')).toBeInTheDocument();
 
       const cancelButton = screen.getByText('取消');
@@ -200,10 +200,10 @@ describe('Providers', () => {
       renderWithLocale(<Providers />);
 
       await waitFor(() => {
-        expect(screen.getByText('暂无厂商，点击"添加厂商"开始')).toBeInTheDocument();
+        expect(screen.getByText('手动添加')).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByText('添加厂商'));
+      fireEvent.click(screen.getByText('手动添加'));
 
       // Fill in required fields
       const keyInput = screen.getByPlaceholderText('例如: openai, deepseek');

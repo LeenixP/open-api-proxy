@@ -154,8 +154,8 @@ describe('Dashboard', () => {
       expect(screen.getByText('OpenAI')).toBeInTheDocument();
       expect(screen.getByText('Anthropic')).toBeInTheDocument();
 
-      // Health badges
-      const healthyBadges = screen.getAllByText('Healthy');
+      // Health badges (locale is zh, so badge labels use Chinese)
+      const healthyBadges = screen.getAllByText('健康');
       expect(healthyBadges.length).toBe(2);
     });
 
@@ -192,8 +192,8 @@ describe('Dashboard', () => {
         expect(screen.getByText('OpenAI')).toBeInTheDocument();
       });
 
-      expect(screen.getByText('Healthy')).toBeInTheDocument();
-      expect(screen.getByText('Down')).toBeInTheDocument();
+      expect(screen.getByText('健康')).toBeInTheDocument();
+      expect(screen.getByText('异常')).toBeInTheDocument();
     });
 
     it('handles provider with no models', async () => {
@@ -348,17 +348,17 @@ describe('Dashboard', () => {
     });
 
     it('navigates to providers on manual add click', async () => {
-      const onNavigate = vi.fn();
+      const onAddProvider = vi.fn();
       vi.mocked(apiClient.getPresets).mockResolvedValue(mockPresets);
 
-      renderWithLocale(<Dashboard onNavigate={onNavigate} />);
+      renderWithLocale(<Dashboard onAddProvider={onAddProvider} />);
 
       await waitFor(() => {
         expect(screen.getByText('手动添加')).toBeInTheDocument();
       });
 
       fireEvent.click(screen.getByText('手动添加'));
-      expect(onNavigate).toHaveBeenCalledWith('providers');
+      expect(onAddProvider).toHaveBeenCalled();
     });
   });
 
