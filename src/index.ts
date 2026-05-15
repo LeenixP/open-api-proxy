@@ -3,9 +3,21 @@ import { createApp } from './server/app.js';
 import { registerAllConverters } from './converters/index.js';
 import { runMigrations, syncConfigKeys } from './migrations/registry.js';
 import type { FastifyInstance } from 'fastify';
+import { readFileSync } from 'fs';
 import path from 'path';
 
+declare const __dirname: string;
+
 const CONFIG_PATH = process.env.CONFIG_PATH || path.resolve(process.cwd(), 'config.yaml');
+
+function getVersion(): string {
+  try {
+    const pkgPath = path.resolve(__dirname, '..', 'package.json');
+    return (JSON.parse(readFileSync(pkgPath, 'utf8')) as { version: string }).version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
 
 async function tryTakeover(port: number): Promise<boolean> {
   try {
@@ -20,11 +32,18 @@ async function tryTakeover(port: number): Promise<boolean> {
 
     // It's an open-api-proxy instance - shut it down
     console.log('Found existing open-api-proxy instance. Shutting it down...');
-    await fetch(`http://127.0.0.1:${port}/api/shutdown`, {
+    const shutdownRes = await fetch(`http://127.0.0.1:${port}/api/shutdown`, {
       method: 'POST',
       signal: AbortSignal.timeout(5000),
     });
-    return true;
+    // If old version doesn't have shutdown endpoint, 404 is returned - treat as success
+    // because the old process will be killed by other means or the port will be freed
+    if (shutdownRes.ok || shutdownRes.status === 404) {
+      console.log('Shutdown request sent.');
+      return true;
+    }
+    console.log('Shutdown request failed with status:', shutdownRes.status);
+    return false;
   } catch {
     return false;
   }
@@ -59,7 +78,7 @@ async function listenWithConflictResolution(
 }
 
 async function main(): Promise<void> {
-  console.log('open-api-proxy v0.1.0 starting...');
+  console.log(`open-api-proxy v${getVersion()} starting...`);
   await runMigrations(CONFIG_PATH);
   let config = loadConfig(CONFIG_PATH);
   const syncResult = syncConfigKeys(config, CONFIG_PATH);

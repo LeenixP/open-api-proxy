@@ -3,6 +3,8 @@ import fastifyStatic from '@fastify/static';
 import fastifyCors from '@fastify/cors';
 import path from 'path';
 import { existsSync } from 'fs';
+
+declare const __dirname: string;
 import type { FastifyError, FastifyInstance } from 'fastify';
 import type { AppConfig } from '../types.js';
 import { registerProxyRoutes } from './routes/proxy.js';
@@ -82,7 +84,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   registerUpdateRoutes(app);
   registerPresetRoutes(app, config);
 
-  const uiDistPath = path.resolve(process.cwd(), 'dist/ui');
+  const uiDistPath = path.resolve(__dirname, '..', 'ui');
   if (existsSync(uiDistPath)) {
     await app.register(fastifyStatic, { root: uiDistPath, prefix: '/', wildcard: false });
     app.setNotFoundHandler((request, reply) => {
