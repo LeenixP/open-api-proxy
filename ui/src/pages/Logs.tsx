@@ -19,10 +19,13 @@ export default function Logs() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState<LevelFilter>('all');
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
+  const [backoffSeconds, setBackoffSeconds] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const esRef = useRef<EventSource | null>(null);
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const connect = useCallback(() => {
     if (esRef.current) {
@@ -35,6 +38,7 @@ export default function Logs() {
     es.onopen = () => {
       setConnectionStatus('connected');
       retryCountRef.current = 0;
+      setBackoffSeconds(0);
     };
 
     es.onmessage = (e) => {
@@ -52,22 +56,57 @@ export default function Logs() {
 
       if (retryCountRef.current >= MAX_RETRIES) {
         setConnectionStatus('disconnected');
+        setBackoffSeconds(0);
         return;
       }
 
       setConnectionStatus('reconnecting');
       const backoff = Math.min(1000 * Math.pow(2, retryCountRef.current), MAX_BACKOFF);
       retryCountRef.current += 1;
+      setBackoffSeconds(Math.ceil(backoff / 1000));
+
+      // Countdown ticker
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      countdownRef.current = setInterval(() => {
+        setBackoffSeconds((prev) => {
+          if (prev <= 1) {
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
 
       retryTimerRef.current = setTimeout(() => {
+        if (countdownRef.current) clearInterval(countdownRef.current);
         connect();
       }, backoff);
     };
   }, []);
 
   const handleReconnect = () => {
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
     retryCountRef.current = 0;
+    setBackoffSeconds(0);
     connect();
+  };
+
+  const handleRetryLogs = () => {
+    setLoadError(null);
+    apiClient.getLogs().then((data) => {
+      if (Array.isArray(data) && data.length > 0) {
+        setLogs(data.slice(-200));
+      }
+    }).catch((err: Error) => {
+      setLoadError(err.message || 'Failed to load logs');
+    });
   };
 
   useEffect(() => {
@@ -76,7 +115,9 @@ export default function Logs() {
       if (Array.isArray(data) && data.length > 0) {
         setLogs(data.slice(-200));
       }
-    }).catch(() => {});
+    }).catch((err: Error) => {
+      setLoadError(err.message || 'Failed to load logs');
+    });
 
     // Start SSE connection
     connect();
@@ -84,6 +125,7 @@ export default function Logs() {
     return () => {
       if (esRef.current) esRef.current.close();
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
     };
   }, [connect]);
 
@@ -104,7 +146,9 @@ export default function Logs() {
   const statusLabel = connectionStatus === 'connected'
     ? t('logs.connected')
     : connectionStatus === 'reconnecting'
-      ? t('logs.reconnecting')
+      ? backoffSeconds > 0
+        ? t('logs.reconnectingIn', { seconds: backoffSeconds })
+        : t('logs.reconnecting')
       : t('logs.disconnected');
 
   return (
@@ -113,9 +157,9 @@ export default function Logs() {
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{t('logs.title')}</h2>
         <div className="flex items-center gap-3">
           <span className={`text-xs font-medium ${statusColor}`}>{statusLabel}</span>
-          {connectionStatus === 'disconnected' && (
+          {(connectionStatus === 'disconnected' || connectionStatus === 'reconnecting') && (
             <button onClick={handleReconnect} className="text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 font-medium">
-              {t('logs.reconnect')}
+              {t('logs.reconnectNow')}
             </button>
           )}
           <button onClick={() => setLogs([])} className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
@@ -150,7 +194,18 @@ export default function Logs() {
             <span className="text-gray-700 dark:text-gray-300">{entry.message}</span>
           </div>
         ))}
-        {filteredLogs.length === 0 && <span className="text-gray-400 dark:text-gray-500">{t('logs.waiting')}</span>}
+        {filteredLogs.length === 0 && (
+          loadError ? (
+            <div className="flex flex-col items-center gap-2 py-8">
+              <span className="text-red-500 dark:text-red-400">{t('logs.loadError')}{loadError ? `: ${loadError}` : ''}</span>
+              <button onClick={handleRetryLogs} className="text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 font-medium">
+                {t('common.retry')}
+              </button>
+            </div>
+          ) : (
+            <span className="text-gray-400 dark:text-gray-500">{t('logs.waiting')}</span>
+          )
+        )}
       </div>
     </div>
   );

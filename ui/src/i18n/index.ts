@@ -40,6 +40,9 @@ const messages: Record<Locale, Record<string, string>> = {
     'dashboard.importing': '导入中...',
     'dashboard.popularPresets': '热门预设',
     'dashboard.importPresetHint': '一键导入常用厂商，用你的 API Key 即可开始使用',
+    'dashboard.healthHealthy': '健康',
+    'dashboard.healthDown': '异常',
+    'dashboard.healthUnknown': '未知',
 
     // Providers
     'providers.title': '厂商管理',
@@ -78,10 +81,22 @@ const messages: Record<Locale, Record<string, string>> = {
     'providers.importing': '导入中...',
     'providers.importFailed': '导入失败: {error}',
     'providers.modelsEmpty': '无',
-    'providers.moreModels': '还有 {count} 个',
     'providers.noMatch': '没有匹配的厂商',
     'providers.searchPlaceholder': '搜索厂商名称、Key 或 URL...',
     'providers.test': '测试 {key}',
+    'providers.statsProviders': '厂商',
+    'providers.statsHealth': '健康',
+    'providers.statsUptime': '运行',
+    'providers.copyEndpoint': '复制代理地址',
+    'providers.emptyTitle': '欢迎使用 open-api-proxy！',
+    'providers.emptyDesc': '尚未配置任何 LLM 厂商。你可以从预设中快速导入，或手动添加。',
+    'providers.emptyAddManually': '手动添加',
+    'providers.emptyPresetsTitle': '热门预设',
+    'providers.emptyPresetsHint': '一键导入常用厂商，用你的 API Key 即可开始使用',
+    'providers.emptyModelsCount': '{count} 个模型',
+    'providers.emptyImport': '导入',
+    'providers.emptyImported': '已导入',
+    'providers.emptyImporting': '导入中...',
     'providers.importModels': '从预设导入模型',
     'providers.noPresetModels': '暂无匹配协议的预设模型',
     'providers.protocolDesc.openai': 'OpenAI Chat Completions API (GPT, DeepSeek, Qwen 等)',
@@ -130,6 +145,7 @@ const messages: Record<Locale, Record<string, string>> = {
     // Playground - Errors
     'playground.error401': '401: API Key 无效 - 请检查厂商配置中的 API Key',
     'playground.errorStatus': '错误 {status}: {message}',
+    'playground.errorGeneric': '错误: {message}',
 
     // Logs
     'logs.title': '日志',
@@ -140,6 +156,9 @@ const messages: Record<Locale, Record<string, string>> = {
     'logs.disconnected': '已断开',
     'logs.reconnect': '重新连接',
     'logs.filterAll': '全部',
+    'logs.levelError': '错误',
+    'logs.levelWarn': '警告',
+    'logs.levelInfo': '信息',
 
     // Settings
     'settings.title': '系统设置',
@@ -158,8 +177,13 @@ const messages: Record<Locale, Record<string, string>> = {
     'settings.importExportHint': '导出为 JSON 格式（服务端使用 YAML 存储）',
     'settings.save': '保存设置',
     'settings.saved': '已保存',
-    'settings.loading': '加载中...',
     'settings.conversions': '协议转换',
+    'settings.conversion.anthropicToOpenai': 'Anthropic → OpenAI Chat',
+    'settings.conversion.openaiToAnthropic': 'OpenAI Chat → Anthropic',
+    'settings.conversion.anthropicToResponses': 'Anthropic → OpenAI Responses',
+    'settings.conversion.responsesToAnthropic': 'OpenAI Responses → Anthropic',
+    'settings.conversion.openaiToResponses': 'OpenAI Chat → OpenAI Responses',
+    'settings.conversion.responsesToOpenai': 'OpenAI Responses → OpenAI Chat',
     'settings.importExport': '配置导入/导出',
     'settings.importSuccess': '配置导入成功',
     'settings.importFailed': '导入失败: {error}',
@@ -177,10 +201,21 @@ const messages: Record<Locale, Record<string, string>> = {
     // Common
     'common.retry': '重试',
     'common.close': '关闭',
+    'common.cancel': '取消',
+    'common.confirm': '确认',
     'common.loading': '加载中...',
+
+    // Settings
+    'settings.importConfirmTitle': '确认导入',
+    'settings.importConfirm': '确定要导入此配置吗？这将覆盖当前设置。',
+    'settings.loadError': '加载设置失败',
+
+    // Logs
+    'logs.loadError': '加载日志失败',
+    'logs.reconnectNow': '立即重连',
+    'logs.reconnectingIn': '{seconds}秒后重连...',
   },
   en: {
-    'nav.dashboard': 'Dashboard',
     'nav.providers': 'Providers',
     'nav.playground': 'Playground',
     'nav.logs': 'Logs',
@@ -216,6 +251,9 @@ const messages: Record<Locale, Record<string, string>> = {
     'dashboard.importing': 'Importing...',
     'dashboard.popularPresets': 'Popular Presets',
     'dashboard.importPresetHint': 'One-click import popular providers, just bring your API key',
+    'dashboard.healthHealthy': 'Healthy',
+    'dashboard.healthDown': 'Down',
+    'dashboard.healthUnknown': 'Unknown',
 
     'providers.title': 'Providers',
     'providers.add': 'Add Provider',
@@ -253,10 +291,22 @@ const messages: Record<Locale, Record<string, string>> = {
     'providers.importing': 'Importing...',
     'providers.importFailed': 'Import failed: {error}',
     'providers.modelsEmpty': 'None',
-    'providers.moreModels': '{count} more',
     'providers.noMatch': 'No matching providers',
     'providers.searchPlaceholder': 'Search by name, key, or URL...',
     'providers.test': 'Test {key}',
+    'providers.statsProviders': 'Providers',
+    'providers.statsHealth': 'Healthy',
+    'providers.statsUptime': 'Uptime',
+    'providers.copyEndpoint': 'Copy Proxy URL',
+    'providers.emptyTitle': 'Welcome to open-api-proxy!',
+    'providers.emptyDesc': 'No LLM providers configured yet. Get started by importing from presets or adding one manually.',
+    'providers.emptyAddManually': 'Add Manually',
+    'providers.emptyPresetsTitle': 'Popular Presets',
+    'providers.emptyPresetsHint': 'One-click import popular providers, just bring your API key',
+    'providers.emptyModelsCount': '{count} models',
+    'providers.emptyImport': 'Import',
+    'providers.emptyImported': 'Imported!',
+    'providers.emptyImporting': 'Importing...',
     'providers.importModels': 'Import models from presets',
     'providers.noPresetModels': 'No preset models for this protocol',
     'providers.protocolDesc.openai': 'OpenAI Chat Completions API (GPT, DeepSeek, Qwen...)',
@@ -304,6 +354,7 @@ const messages: Record<Locale, Record<string, string>> = {
     // Playground - Errors
     'playground.error401': '401: API Key invalid - please check the API Key in provider settings',
     'playground.errorStatus': 'Error {status}: {message}',
+    'playground.errorGeneric': 'Error: {message}',
 
     'logs.title': 'Logs',
     'logs.clear': 'Clear',
@@ -313,6 +364,9 @@ const messages: Record<Locale, Record<string, string>> = {
     'logs.disconnected': 'Disconnected',
     'logs.reconnect': 'Reconnect',
     'logs.filterAll': 'All',
+    'logs.levelError': 'Error',
+    'logs.levelWarn': 'Warn',
+    'logs.levelInfo': 'Info',
 
     'settings.title': 'Settings',
     'settings.server': 'Server',
@@ -330,8 +384,13 @@ const messages: Record<Locale, Record<string, string>> = {
     'settings.importExportHint': 'Export as JSON (server uses YAML storage)',
     'settings.save': 'Save Settings',
     'settings.saved': 'Saved',
-    'settings.loading': 'Loading...',
     'settings.conversions': 'Protocol Conversions',
+    'settings.conversion.anthropicToOpenai': 'Anthropic → OpenAI Chat',
+    'settings.conversion.openaiToAnthropic': 'OpenAI Chat → Anthropic',
+    'settings.conversion.anthropicToResponses': 'Anthropic → OpenAI Responses',
+    'settings.conversion.responsesToAnthropic': 'OpenAI Responses → Anthropic',
+    'settings.conversion.openaiToResponses': 'OpenAI Chat → OpenAI Responses',
+    'settings.conversion.responsesToOpenai': 'OpenAI Responses → OpenAI Chat',
     'settings.importExport': 'Config Import/Export',
     'settings.importSuccess': 'Config imported successfully',
     'settings.importFailed': 'Import failed: {error}',
@@ -349,6 +408,19 @@ const messages: Record<Locale, Record<string, string>> = {
     'common.retry': 'Retry',
     'common.close': 'Close',
     'common.loading': 'Loading...',
+
+    'common.cancel': 'Cancel',
+    'common.confirm': 'Confirm',
+
+    // Settings
+    'settings.importConfirmTitle': 'Confirm Import',
+    'settings.importConfirm': 'Are you sure you want to import this configuration? This will overwrite your current settings.',
+    'settings.loadError': 'Failed to load settings',
+
+    // Logs
+    'logs.loadError': 'Failed to load logs',
+    'logs.reconnectNow': 'Reconnect Now',
+    'logs.reconnectingIn': 'Reconnecting in {seconds}s...',
   },
 };
 

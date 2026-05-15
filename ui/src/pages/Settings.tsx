@@ -1,18 +1,24 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
+import type { AppConfig } from '../api/client';
 import { X, Check } from 'lucide-react';
 import { useLocale } from '../i18n/LocaleContext';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
 
 export default function Settings() {
   const { t } = useLocale();
-  const [config, setConfig] = useState<any>(null);
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<any>(null);
   const [statusMessage, setStatusMessage] = useState('');
   const [statusType, setStatusType] = useState<'success' | 'error'>('success');
+  const [importing, setImporting] = useState(false);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [pendingImport, setPendingImport] = useState<AppConfig | null>(null);
 
   const showStatus = (msg: string, type: 'success' | 'error' = 'success') => {
     setStatusMessage(msg);
@@ -20,8 +26,15 @@ export default function Settings() {
     if (type === 'success') setTimeout(() => setStatusMessage(''), 3000);
   };
 
+  const loadConfig = () => {
+    setError(null);
+    apiClient.getConfig().then(setConfig).catch((err: Error) => {
+      setError(err.message);
+    });
+  };
+
   useEffect(() => {
-    apiClient.getConfig().then(setConfig).catch(() => {});
+    loadConfig();
     apiClient.checkUpdate().then(setUpdateInfo).catch(() => {});
   }, []);
 
@@ -50,36 +63,67 @@ export default function Settings() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async (ev) => {
+    reader.onload = (ev) => {
       try {
-        const imported = JSON.parse(ev.target?.result as string);
-        await apiClient.updateConfig(imported);
-        setConfig(imported);
-        showStatus(t('settings.importSuccess'));
+        const imported = JSON.parse(ev.target?.result as string) as AppConfig;
+        setPendingImport(imported);
+        setShowImportConfirm(true);
       } catch (err: any) {
         showStatus(t('settings.importFailed', { error: err.message }), 'error');
       }
     };
     reader.readAsText(file);
+    e.target.value = '';
   };
 
-  if (!config) return (
-    <div className="animate-pulse">
-      <div className="h-7 w-40 bg-gray-200 dark:bg-gray-700 rounded mb-6" />
-      <div className="space-y-6 max-w-2xl">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
-            <div className="h-5 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-3" />
-            <div className="grid grid-cols-2 gap-4">
-              <div className="h-9 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-              <div className="h-9 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+  const handleConfirmImport = async () => {
+    if (!pendingImport) return;
+    setShowImportConfirm(false);
+    setImporting(true);
+    try {
+      await apiClient.updateConfig(pendingImport);
+      setConfig(pendingImport);
+      showStatus(t('settings.importSuccess'));
+    } catch (err: any) {
+      showStatus(t('settings.importFailed', { error: err.message }), 'error');
+    } finally {
+      setImporting(false);
+      setPendingImport(null);
+    }
+  };
+
+  const handleCancelImport = () => {
+    setShowImportConfirm(false);
+    setPendingImport(null);
+  };
+
+  if (!config) {
+    if (error) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20">
+          <p className="text-red-600 dark:text-red-400 text-sm mb-4">{t('settings.loadError')}: {error}</p>
+          <Button variant="secondary" onClick={loadConfig}>{t('common.retry')}</Button>
+        </div>
+      );
+    }
+    return (
+      <div className="animate-pulse">
+        <div className="h-7 w-40 bg-gray-200 dark:bg-gray-700 rounded mb-6" />
+        <div className="space-y-6 max-w-2xl">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+              <div className="h-5 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-3" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="h-9 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+                <div className="h-9 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+              </div>
             </div>
-          </div>
-        ))}
-        <div className="h-10 w-24 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+          ))}
+          <div className="h-10 w-24 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <div>
@@ -93,6 +137,12 @@ export default function Settings() {
         }`}>
           <span>{statusMessage}</span>
           <button onClick={() => setStatusMessage('')} className="opacity-60 hover:opacity-100"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
+      {importing && (
+        <div className="rounded-lg p-3 text-sm mb-4 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+          {t('common.loading')}
         </div>
       )}
 
@@ -150,7 +200,7 @@ export default function Settings() {
               <label key={key} className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={config.conversions?.[key] ?? true}
+                  checked={config.conversions?.[key as keyof typeof config.conversions] ?? true}
                   onChange={(e) => setConfig({
                     ...config,
                     conversions: { ...config.conversions, [key]: e.target.checked }
@@ -189,6 +239,25 @@ export default function Settings() {
           {saved ? <><Check className="w-4 h-4 inline-block" /> {t('settings.saved')}</> : t('settings.save')}
         </Button>
       </div>
+
+      <Modal
+        open={showImportConfirm}
+        onClose={handleCancelImport}
+        title={t('settings.importConfirmTitle')}
+        size="sm"
+      >
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+          {t('settings.importConfirm')}
+        </p>
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary" onClick={handleCancelImport}>
+            {t('common.cancel')}
+          </Button>
+          <Button variant="danger" onClick={handleConfirmImport}>
+            {t('common.confirm')}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
