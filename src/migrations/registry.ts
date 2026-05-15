@@ -51,6 +51,12 @@ export async function syncConfigKeys(config: AppConfig, configPath?: string): Pr
   function syncObject(user: Record<string, unknown>, def: Record<string, unknown>, path: string): Record<string, unknown> {
     const result: Record<string, unknown> = {};
 
+    // Empty default object = dictionary/map container (e.g. providers).
+    // Preserve all user keys as-is, don't check against the empty default.
+    if (Object.keys(def).length === 0) {
+      return { ...user };
+    }
+
     // Add keys from defaults
     for (const key of Object.keys(def)) {
       const keyPath = path ? `${path}.${key}` : key;
