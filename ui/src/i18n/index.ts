@@ -1,4 +1,4 @@
-type Locale = 'zh' | 'en';
+export type Locale = 'zh' | 'en';
 
 const messages: Record<Locale, Record<string, string>> = {
   zh: {
@@ -25,17 +25,15 @@ const messages: Record<Locale, Record<string, string>> = {
     'dashboard.models': '模型数',
     'dashboard.uptime': '运行时间',
     'dashboard.status': '厂商状态',
-    'dashboard.noProviders': '暂无厂商。请在"厂商管理"页面添加。',
     'dashboard.modelsCount': '{count} 个模型',
-    'dashboard.noModels': '暂无模型',
-    'dashboard.healthyCount': '{healthy}/{total} 正常',
-    'dashboard.modelOverview': '模型总览',
     'dashboard.quickActions': '快捷操作',
     'dashboard.addProvider': '添加厂商',
     'dashboard.apiTest': 'API 测试',
     'dashboard.emptyTitle': '欢迎使用 open-api-proxy！',
+    'dashboard.viewAll': '查看全部',
+    'dashboard.andMore': '还有 {count} 个...',
+    'dashboard.testProvider': '测试 {name}',
     'dashboard.emptyDesc': '尚未配置任何 LLM 厂商。你可以从预设中快速导入，或手动添加。',
-    'dashboard.importFromPreset': '从预设导入',
     'dashboard.addManually': '手动添加',
     'dashboard.import': '导入',
     'dashboard.imported': '已导入',
@@ -78,10 +76,12 @@ const messages: Record<Locale, Record<string, string>> = {
     'providers.importPresetsTitle': '从预设导入厂商',
     'providers.importPresetsDesc': '选择一个预设快速添加常见厂商配置。',
     'providers.importing': '导入中...',
-    'providers.importSuccess': '"{name}" 导入成功',
     'providers.importFailed': '导入失败: {error}',
     'providers.modelsEmpty': '无',
     'providers.moreModels': '还有 {count} 个',
+    'providers.noMatch': '没有匹配的厂商',
+    'providers.searchPlaceholder': '搜索厂商名称、Key 或 URL...',
+    'providers.test': '测试 {key}',
     'providers.importModels': '从预设导入模型',
     'providers.noPresetModels': '暂无匹配协议的预设模型',
     'providers.protocolDesc.openai': 'OpenAI Chat Completions API (GPT, DeepSeek, Qwen 等)',
@@ -93,6 +93,7 @@ const messages: Record<Locale, Record<string, string>> = {
 
     // Playground
     'playground.title': 'API 测试',
+    'playground.helperText': '选择厂商和模型，输入消息，点击发送来测试你的代理配置。支持 Ctrl+Enter 快捷发送。',
     'playground.endpoint': '端点',
     'playground.model': 'Model (provider/model)',
     'playground.modelPlaceholder': '例如: openai/gpt-4o',
@@ -134,7 +135,11 @@ const messages: Record<Locale, Record<string, string>> = {
     'logs.title': '日志',
     'logs.clear': '清空',
     'logs.waiting': '等待日志...',
-    'logs.autoScroll': '自动滚动',
+    'logs.connected': '已连接',
+    'logs.reconnecting': '重连中...',
+    'logs.disconnected': '已断开',
+    'logs.reconnect': '重新连接',
+    'logs.filterAll': '全部',
 
     // Settings
     'settings.title': '系统设置',
@@ -173,8 +178,6 @@ const messages: Record<Locale, Record<string, string>> = {
     'common.retry': '重试',
     'common.close': '关闭',
     'common.loading': '加载中...',
-    'common.error': '出错了',
-    'common.delete': '删除',
   },
   en: {
     'nav.dashboard': 'Dashboard',
@@ -198,17 +201,15 @@ const messages: Record<Locale, Record<string, string>> = {
     'dashboard.models': 'Models',
     'dashboard.uptime': 'Uptime',
     'dashboard.status': 'Provider Status',
-    'dashboard.noProviders': 'No providers. Add one in "Providers" page.',
     'dashboard.modelsCount': '{count} models',
-    'dashboard.noModels': 'No models',
-    'dashboard.healthyCount': '{healthy}/{total} healthy',
-    'dashboard.modelOverview': 'Models Overview',
     'dashboard.quickActions': 'Quick Actions',
     'dashboard.addProvider': 'Add Provider',
     'dashboard.apiTest': 'API Playground',
     'dashboard.emptyTitle': 'Welcome to open-api-proxy!',
+    'dashboard.viewAll': 'View All',
+    'dashboard.andMore': 'and {count} more...',
+    'dashboard.testProvider': 'Test {name}',
     'dashboard.emptyDesc': 'No LLM providers configured yet. Get started by importing from presets or adding one manually.',
-    'dashboard.importFromPreset': 'Import from Presets',
     'dashboard.addManually': 'Add Manually',
     'dashboard.import': 'Import',
     'dashboard.imported': 'Imported!',
@@ -250,10 +251,12 @@ const messages: Record<Locale, Record<string, string>> = {
     'providers.importPresetsTitle': 'Import Provider from Presets',
     'providers.importPresetsDesc': 'Select a preset to quickly add a common provider configuration.',
     'providers.importing': 'Importing...',
-    'providers.importSuccess': '"{name}" imported',
     'providers.importFailed': 'Import failed: {error}',
     'providers.modelsEmpty': 'None',
     'providers.moreModels': '{count} more',
+    'providers.noMatch': 'No matching providers',
+    'providers.searchPlaceholder': 'Search by name, key, or URL...',
+    'providers.test': 'Test {key}',
     'providers.importModels': 'Import models from presets',
     'providers.noPresetModels': 'No preset models for this protocol',
     'providers.protocolDesc.openai': 'OpenAI Chat Completions API (GPT, DeepSeek, Qwen...)',
@@ -264,6 +267,7 @@ const messages: Record<Locale, Record<string, string>> = {
     'providers.modelsSection': 'Models',
 
     'playground.title': 'API Playground',
+    'playground.helperText': 'Select a provider and model, type a message, and click Send to test your proxy configuration. Ctrl+Enter to send.',
     'playground.endpoint': 'Endpoint',
     'playground.model': 'Model (provider/model)',
     'playground.modelPlaceholder': 'e.g. openai/gpt-4o',
@@ -304,7 +308,11 @@ const messages: Record<Locale, Record<string, string>> = {
     'logs.title': 'Logs',
     'logs.clear': 'Clear',
     'logs.waiting': 'Waiting for logs...',
-    'logs.autoScroll': 'Auto-scroll',
+    'logs.connected': 'Connected',
+    'logs.reconnecting': 'Reconnecting...',
+    'logs.disconnected': 'Disconnected',
+    'logs.reconnect': 'Reconnect',
+    'logs.filterAll': 'All',
 
     'settings.title': 'Settings',
     'settings.server': 'Server',
@@ -341,24 +349,11 @@ const messages: Record<Locale, Record<string, string>> = {
     'common.retry': 'Retry',
     'common.close': 'Close',
     'common.loading': 'Loading...',
-    'common.error': 'Error',
-    'common.delete': 'Delete',
   },
 };
 
-// Detect browser language, default to zh
-function detectLocale(): Locale {
-  if (typeof navigator !== 'undefined') {
-    const lang = navigator.language.toLowerCase();
-    if (lang.startsWith('zh')) return 'zh';
-  }
-  return 'zh'; // Default to Chinese
-}
-
-let currentLocale: Locale = detectLocale();
-
-export function t(key: string, params?: Record<string, string | number>): string {
-  let msg = messages[currentLocale]?.[key] || messages.en[key] || key;
+export function translate(locale: Locale, key: string, params?: Record<string, string | number>): string {
+  let msg = messages[locale]?.[key] || messages.en[key] || key;
   if (params) {
     for (const [k, v] of Object.entries(params)) {
       msg = msg.replace(`{${k}}`, String(v));
@@ -367,10 +362,18 @@ export function t(key: string, params?: Record<string, string | number>): string
   return msg;
 }
 
-export function setLocale(locale: Locale): void {
-  currentLocale = locale;
+function getLocale(): Locale {
+  if (typeof localStorage !== 'undefined') {
+    const stored = localStorage.getItem('locale');
+    if (stored === 'zh' || stored === 'en') return stored;
+  }
+  if (typeof navigator !== 'undefined') {
+    const lang = navigator.language.toLowerCase();
+    if (lang.startsWith('zh')) return 'zh';
+  }
+  return 'en';
 }
 
-export function getLocale(): Locale {
-  return currentLocale;
+export function t(key: string, params?: Record<string, string | number>): string {
+  return translate(getLocale(), key, params);
 }
