@@ -15,7 +15,7 @@ import { registerHealthRoute } from './routes/health.js';
 import { registerLogsRoutes } from './routes/logs.js';
 import { registerUpdateRoutes } from './routes/update.js';
 import { registerPresetRoutes } from './routes/presets.js';
-import { requestLogger, initFileLogging } from './middleware/logger.js';
+import { registerLoggerHooks, initFileLogging } from './middleware/logger.js';
 import { initAuth, authMiddleware } from './middleware/auth.js';
 import { rateLimiter } from './middleware/rate-limit.js';
 
@@ -58,7 +58,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     }
   });
 
-  app.addHook('onResponse', requestLogger);
+  registerLoggerHooks(app);
 
   app.addHook('onSend', async (_request, reply, payload) => {
     reply.header('X-Content-Type-Options', 'nosniff');

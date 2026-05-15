@@ -45,7 +45,7 @@ export async function runMigrations(configPath: string): Promise<void> {
  * Sync user config against defaults: add missing keys, remove deprecated keys.
  * Returns the synced config and a boolean indicating whether any changes were made.
  */
-export function syncConfigKeys(config: AppConfig, configPath?: string): { config: AppConfig; changed: boolean } {
+export async function syncConfigKeys(config: AppConfig, configPath?: string): Promise<{ config: AppConfig; changed: boolean }> {
   let changed = false;
 
   function syncObject(user: Record<string, unknown>, def: Record<string, unknown>, path: string): Record<string, unknown> {
@@ -95,7 +95,7 @@ export function syncConfigKeys(config: AppConfig, configPath?: string): { config
   synced._schema_version = config._schema_version;
 
   if (configPath && changed) {
-    writeConfig(configPath, synced);
+    await writeConfig(configPath, synced);
     console.log('Config synced with defaults.');
   }
 

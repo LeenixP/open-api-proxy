@@ -1020,7 +1020,7 @@ export const AnthropicToOpenAIChatConverter: Converter = createConverter(
     },
 
     convertError(status: number, body: string): { status: number; body: string } {
-      return { status, body: convertAnthropicErrorToOpenAI(body) };
+      return { status, body: convertOpenAIErrorToAnthropic(body) };
     },
 
     createStreamContext(): StreamContext {
@@ -1046,7 +1046,7 @@ export const OpenAIChatToAnthropicConverter: Converter = createConverter(
     },
 
     convertError(status: number, body: string): { status: number; body: string } {
-      return { status, body: convertOpenAIErrorToAnthropic(body) };
+      return { status, body: convertAnthropicErrorToOpenAI(body) };
     },
 
     createStreamContext(): StreamContext {

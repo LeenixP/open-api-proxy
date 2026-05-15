@@ -14,6 +14,10 @@ export async function proxyStreamToClient(
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'X-XSS-Protection': '0',
+    'Referrer-Policy': 'no-referrer',
   });
 
   if (!upstreamResponse.body) {
@@ -26,35 +30,57 @@ export async function proxyStreamToClient(
   let buffer = '';
 
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    if (converter) {
+      // With converter: parse individual lines and convert them
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
 
-        const converted = converter
-          ? converter.convertStreamChunk(trimmed, streamCtx)
-          : trimmed;
+          const converted = converter.convertStreamChunk(trimmed, streamCtx);
+          if (converted !== null) {
+            reply.raw.write(converted + '\n\n');
+          }
+        }
+      }
 
+      // Flush remaining buffer
+      if (buffer.trim()) {
+        const converted = converter.convertStreamChunk(buffer.trim(), streamCtx);
         if (converted !== null) {
           reply.raw.write(converted + '\n\n');
         }
       }
-    }
+    } else {
+      // No converter: pass through raw SSE data as-is, preserving framing
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-    // Flush remaining buffer
-    if (buffer.trim()) {
-      const converted = converter
-        ? converter.convertStreamChunk(buffer.trim(), streamCtx)
-        : buffer.trim();
-      if (converted !== null) {
-        reply.raw.write(converted + '\n\n');
+        buffer += decoder.decode(value, { stream: true });
+
+        // Split on double newline (SSE event boundary)
+        let eventEnd: number;
+        while ((eventEnd = buffer.indexOf('\n\n')) !== -1) {
+          const event = buffer.slice(0, eventEnd + 2);
+          buffer = buffer.slice(eventEnd + 2);
+          reply.raw.write(event);
+        }
+      }
+
+      // Flush remaining buffer (incomplete event at stream end)
+      if (buffer.length > 0) {
+        reply.raw.write(buffer);
+        if (!buffer.endsWith('\n\n')) {
+          reply.raw.write('\n\n');
+        }
       }
     }
   } catch (err) {

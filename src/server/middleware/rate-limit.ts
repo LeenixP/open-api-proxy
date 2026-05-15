@@ -5,21 +5,21 @@ interface RateLimitEntry {
   resetAt: number;
 }
 
-const store = new Map<string, RateLimitEntry>();
-
-// Cleanup every 60 seconds
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of store) {
-    if (now > entry.resetAt) store.delete(key);
-  }
-}, 60_000).unref();
-
 export function resetRateLimitStore(): void {
-  store.clear();
+  // No-op kept for API compatibility; each limiter instance manages its own store
 }
 
 export function rateLimiter(maxRequests: number, windowMs: number) {
+  const store = new Map<string, RateLimitEntry>();
+
+  // Cleanup every 60 seconds
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of store) {
+      if (now > entry.resetAt) store.delete(key);
+    }
+  }, 60_000).unref();
+
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const key = request.ip || 'unknown';
     const now = Date.now();
@@ -36,6 +36,7 @@ export function rateLimiter(maxRequests: number, windowMs: number) {
       reply.status(429).send({
         error: { message: 'Too many requests', type: 'rate_limit_error' },
       });
+      return reply;
     }
   };
 }

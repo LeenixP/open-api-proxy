@@ -58,24 +58,39 @@ class ProviderHealthChecker {
   }
 
   // Probe a provider's base URL to check connectivity.
-  // Protocol-specific: tries /models first, falls back to base URL connectivity check.
+  // First tries without auth to avoid leaking keys. Only sends credentials if the
+  // unauthenticated request returns 401/403, confirming the server requires auth.
   async probeProvider(key: string, provider: ProviderConfig): Promise<boolean> {
     const baseUrl = provider.base_url.replace(/\/+$/, '');
     const primaryUrl = baseUrl + '/models';
 
     try {
+      // First attempt: no credentials
       const res = await fetch(primaryUrl, {
         method: 'GET',
-        headers: provider.protocol === 'anthropic'
-          ? { 'x-api-key': provider.api_key, 'anthropic-version': '2023-06-01' }
-          : { 'Authorization': `Bearer ${provider.api_key}` },
         signal: AbortSignal.timeout(this.healthCheckTimeout),
       });
 
-      if (res.ok || res.status === 401 || res.status === 403) {
-        // Endpoint exists — 401/403 means auth failed but service is reachable
+      if (res.ok) {
         this.recordSuccess(key);
         return true;
+      }
+
+      // Server requires auth — safe to send credentials since it responded
+      if (res.status === 401 || res.status === 403) {
+        const authRes = await fetch(primaryUrl, {
+          method: 'GET',
+          headers: provider.protocol === 'anthropic'
+            ? { 'x-api-key': provider.api_key, 'anthropic-version': '2023-06-01' }
+            : { 'Authorization': `Bearer ${provider.api_key}` },
+          signal: AbortSignal.timeout(this.healthCheckTimeout),
+        });
+        if (authRes.ok || authRes.status === 401 || authRes.status === 403) {
+          this.recordSuccess(key);
+          return true;
+        }
+        this.recordFailure(key);
+        return false;
       }
 
       // If /models returns 404/405, the protocol may not support this endpoint.

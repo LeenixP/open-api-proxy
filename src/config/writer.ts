@@ -1,10 +1,10 @@
-import { writeFileSync, mkdirSync } from 'fs';
+import { mkdir, writeFile } from 'fs/promises';
 import { dirname } from 'path';
 import * as yaml from 'js-yaml';
 import type { AppConfig } from '../types.js';
 
-export function writeConfig(configPath: string, config: AppConfig): void {
-  mkdirSync(dirname(configPath), { recursive: true });
+export async function writeConfig(configPath: string, config: AppConfig): Promise<void> {
+  await mkdir(dirname(configPath), { recursive: true });
 
   const toWrite = structuredClone(config) as unknown as Record<string, unknown>;
 
@@ -14,5 +14,5 @@ export function writeConfig(configPath: string, config: AppConfig): void {
     quotingType: '"',
   });
 
-  writeFileSync(configPath, yamlStr, 'utf8');
+  await writeFile(configPath, yamlStr, 'utf8');
 }

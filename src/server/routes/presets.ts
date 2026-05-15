@@ -30,7 +30,7 @@ export function registerPresetRoutes(app: FastifyInstance, config: AppConfig): v
       protocol: preset.protocol,
       models: [...preset.models],
     };
-    writeConfig(CONFIG_PATH, config);
+    await writeConfig(CONFIG_PATH, config);
     reply.status(201).send({ ok: true, key: providerKey, provider: config.providers[providerKey] });
   });
 }

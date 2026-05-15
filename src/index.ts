@@ -81,7 +81,7 @@ async function main(): Promise<void> {
   console.log(`open-api-proxy v${getVersion()} starting...`);
   await runMigrations(CONFIG_PATH);
   let config = loadConfig(CONFIG_PATH);
-  const syncResult = syncConfigKeys(config, CONFIG_PATH);
+  const syncResult = await syncConfigKeys(config, CONFIG_PATH);
   config = syncResult.config;
   console.log(`Loaded ${Object.keys(config.providers).length} providers`);
 

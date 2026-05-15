@@ -3,6 +3,23 @@ import type { AppConfig } from '../../types.js';
 import { writeConfig } from '../../config/writer.js';
 import path from 'path';
 
+function deepMerge<T extends Record<string, unknown>>(base: T, overlay: Record<string, unknown>): T {
+  const result = { ...base };
+  for (const [key, val] of Object.entries(overlay)) {
+    if (val !== undefined && val !== null) {
+      if (typeof val === 'object' && !Array.isArray(val) && typeof result[key] === 'object' && !Array.isArray(result[key])) {
+        (result as Record<string, unknown>)[key] = deepMerge(
+          (result as Record<string, unknown>)[key] as Record<string, unknown>,
+          val as Record<string, unknown>,
+        );
+      } else {
+        (result as Record<string, unknown>)[key] = val;
+      }
+    }
+  }
+  return result;
+}
+
 const CONFIG_PATH = process.env.CONFIG_PATH || path.resolve(process.cwd(), 'config.yaml');
 
 export function registerConfigRoutes(app: FastifyInstance, config: AppConfig): void {
@@ -26,8 +43,9 @@ export function registerConfigRoutes(app: FastifyInstance, config: AppConfig): v
       }
     }
 
-    writeConfig(CONFIG_PATH, newConfig as unknown as AppConfig);
-    Object.assign(config, newConfig);
+    const merged = deepMerge(config as unknown as Record<string, unknown>, newConfig) as unknown as AppConfig;
+    await writeConfig(CONFIG_PATH, merged);
+    Object.assign(config, merged);
     reply.send({ ok: true });
   });
 }

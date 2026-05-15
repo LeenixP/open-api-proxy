@@ -16,7 +16,13 @@ function expandEnvVars(value: string): string {
 function expandEnvInObject(obj: unknown): void {
   if (typeof obj === 'string') return;
   if (Array.isArray(obj)) {
-    for (const item of obj) expandEnvInObject(item);
+    for (let i = 0; i < obj.length; i++) {
+      if (typeof obj[i] === 'string' && (obj[i] as string).includes('${')) {
+        obj[i] = expandEnvVars(obj[i] as string);
+      } else if (typeof obj[i] === 'object' && obj[i] !== null) {
+        expandEnvInObject(obj[i]);
+      }
+    }
     return;
   }
   if (obj && typeof obj === 'object') {
