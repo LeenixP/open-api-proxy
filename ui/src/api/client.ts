@@ -28,4 +28,7 @@ export const apiClient = {
     return api<any>('/api/update/execute', { method: 'POST', headers });
   },
   getModels: () => api<{ object: string; data: Array<{ id: string }> }>('/v1/models'),
+  getPresets: () => api<Record<string, any>>('/api/presets'),
+  importPreset: (key: string, providerKey?: string) =>
+    api<any>('/api/presets/' + key + '/import', { method: 'POST', body: JSON.stringify({ providerKey: providerKey || key }) }),
 };

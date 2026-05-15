@@ -6,10 +6,10 @@ import { apiClient } from '../../ui/src/api/client';
 
 vi.mock('../../ui/src/api/client', () => ({
   apiClient: {
-    getProviders: vi.fn(),
+    getProviders: vi.fn().mockResolvedValue({}),
     getHealth: vi.fn(),
     getModels: vi.fn().mockResolvedValue({ data: [{ id: 'openai/gpt-4o' }, { id: 'anthropic/claude-sonnet' }] }),
-    getConfig: vi.fn(),
+    getConfig: vi.fn().mockResolvedValue({ conversions: {} }),
     updateConfig: vi.fn(),
     createProvider: vi.fn(),
     updateProvider: vi.fn(),

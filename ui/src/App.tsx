@@ -13,7 +13,7 @@ export default function App() {
 
   return (
     <Layout currentPage={page} onNavigate={setPage}>
-      <div className={page === 'dashboard' ? '' : 'hidden'}><Dashboard /></div>
+      <div className={page === 'dashboard' ? '' : 'hidden'}><Dashboard onNavigate={setPage} /></div>
       <div className={page === 'providers' ? '' : 'hidden'}><Providers /></div>
       <div className={page === 'playground' ? '' : 'hidden'}><Playground /></div>
       <div className={page === 'logs' ? '' : 'hidden'}><Logs /></div>

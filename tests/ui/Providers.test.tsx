@@ -9,6 +9,8 @@ vi.mock('../../ui/src/api/client', () => ({
     getProviders: vi.fn(),
     getHealth: vi.fn(),
     getModels: vi.fn(),
+    getPresets: vi.fn(),
+    importPreset: vi.fn(),
     getConfig: vi.fn(),
     updateConfig: vi.fn(),
     createProvider: vi.fn(),
@@ -31,6 +33,9 @@ const mockProviders = {
 describe('Providers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(apiClient.getPresets).mockResolvedValue({});
+    vi.mocked(apiClient.getHealth).mockResolvedValue({ uptime: 0, providers: {} });
+    vi.mocked(apiClient.getModels).mockResolvedValue({ data: [] });
   });
 
   describe('Empty state', () => {
@@ -74,14 +79,15 @@ describe('Providers', () => {
       });
     });
 
-    it('shows model counts in the table', async () => {
+    it('shows model chips in the table', async () => {
       vi.mocked(apiClient.getProviders).mockResolvedValue(mockProviders);
 
       render(<Providers />);
 
       await waitFor(() => {
-        expect(screen.getByText('2')).toBeInTheDocument(); // openai has 2 models
-        expect(screen.getByText('1')).toBeInTheDocument(); // anthropic has 1 model
+        expect(screen.getByText('gpt-4o')).toBeInTheDocument();
+        expect(screen.getByText('gpt-4o-mini')).toBeInTheDocument();
+        expect(screen.getByText('claude-sonnet-4-20250514')).toBeInTheDocument();
       });
     });
   });
