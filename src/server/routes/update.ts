@@ -3,10 +3,21 @@ import { readFileSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import path from 'path';
 
+function resolvePackageJson(): string {
+  const candidates = [
+    path.resolve(__dirname, '../../../package.json'),
+    path.resolve(process.cwd(), 'package.json'),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return candidates[0];
+}
+
 async function checkLatestVersion(): Promise<{ current: string; latest: string | null; hasUpdate: boolean }> {
-  let currentVersion = '0.1.0';
+  let currentVersion = 'unknown';
   try {
-    const pkg = JSON.parse(readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'));
+    const pkg = JSON.parse(readFileSync(resolvePackageJson(), 'utf8'));
     currentVersion = pkg.version;
   } catch {
     // ignore
