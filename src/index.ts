@@ -5,10 +5,9 @@ import { runMigrations, syncConfigKeys } from './migrations/registry.js';
 import type { FastifyInstance } from 'fastify';
 import { readFileSync } from 'fs';
 import path from 'path';
+import { CONFIG_PATH } from './lib/constants.js';
 
 declare const __dirname: string;
-
-const CONFIG_PATH = process.env.CONFIG_PATH || path.resolve(process.cwd(), 'config.yaml');
 
 function getVersion(): string {
   try {

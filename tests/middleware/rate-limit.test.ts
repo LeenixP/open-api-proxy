@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rateLimiter, resetRateLimitStore } from '../../src/server/middleware/rate-limit.js';
+import { rateLimiter } from '../../src/server/middleware/rate-limit.js';
 
 function createMockReply() {
   const result: { status?: number; body?: any } = {};
@@ -23,7 +23,6 @@ function createMockRequest(ip: string) {
 describe('rateLimiter', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    resetRateLimitStore();
   });
 
   afterEach(() => {

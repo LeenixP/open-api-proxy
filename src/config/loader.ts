@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'fs';
 import * as yaml from 'js-yaml';
 import { defaults } from './defaults.js';
+import { deepMerge } from '../lib/utils.js';
 import type { AppConfig } from '../types.js';
 
 function expandEnvVars(value: string): string {
@@ -34,23 +35,6 @@ function expandEnvInObject(obj: unknown): void {
       }
     }
   }
-}
-
-function deepMerge<T extends Record<string, unknown>>(base: T, overlay: Record<string, unknown>): T {
-  const result = { ...base };
-  for (const [key, val] of Object.entries(overlay)) {
-    if (val !== undefined && val !== null) {
-      if (typeof val === 'object' && !Array.isArray(val) && typeof result[key] === 'object' && !Array.isArray(result[key])) {
-        (result as Record<string, unknown>)[key] = deepMerge(
-          (result as Record<string, unknown>)[key] as Record<string, unknown>,
-          val as Record<string, unknown>
-        );
-      } else {
-        (result as Record<string, unknown>)[key] = val;
-      }
-    }
-  }
-  return result;
 }
 
 export function loadConfig(configPath: string): AppConfig {

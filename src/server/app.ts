@@ -32,7 +32,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
 
   // File-based logging
   if (config.logging.dir) {
-    initFileLogging(config.logging.dir, config.logging.max_files);
+    await initFileLogging(config.logging.dir, config.logging.max_files);
   }
 
   // Initialize management API authentication

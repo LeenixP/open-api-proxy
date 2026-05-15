@@ -1,26 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppConfig } from '../../types.js';
 import { writeConfig } from '../../config/writer.js';
-import path from 'path';
+import { deepMerge } from '../../lib/utils.js';
+import { CONFIG_PATH } from '../../lib/constants.js';
 
-function deepMerge<T extends Record<string, unknown>>(base: T, overlay: Record<string, unknown>): T {
-  const result = { ...base };
-  for (const [key, val] of Object.entries(overlay)) {
-    if (val !== undefined && val !== null) {
-      if (typeof val === 'object' && !Array.isArray(val) && typeof result[key] === 'object' && !Array.isArray(result[key])) {
-        (result as Record<string, unknown>)[key] = deepMerge(
-          (result as Record<string, unknown>)[key] as Record<string, unknown>,
-          val as Record<string, unknown>,
-        );
-      } else {
-        (result as Record<string, unknown>)[key] = val;
-      }
-    }
-  }
-  return result;
-}
-
-const CONFIG_PATH = process.env.CONFIG_PATH || path.resolve(process.cwd(), 'config.yaml');
+const ALLOWED_TOP_LEVEL_KEYS = new Set(['server', 'proxy', 'providers', 'conversions', 'logging']);
 
 export function registerConfigRoutes(app: FastifyInstance, config: AppConfig): void {
   app.get('/api/config', async (_request, reply) => {
@@ -28,9 +12,17 @@ export function registerConfigRoutes(app: FastifyInstance, config: AppConfig): v
   });
 
   app.put('/api/config', async (request, reply) => {
-    const newConfig = request.body as Record<string, unknown>;
-    if (!newConfig || typeof newConfig !== 'object') {
-      return reply.status(400).send({ error: { message: 'Invalid config body' } });
+    const body = request.body as Record<string, unknown>;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return reply.status(400).send({ error: { message: 'Invalid config body: must be a JSON object' } });
+    }
+
+    // Whitelist allowed top-level keys to prevent config corruption from arbitrary JSON
+    const newConfig: Record<string, unknown> = {};
+    for (const key of Object.keys(body)) {
+      if (ALLOWED_TOP_LEVEL_KEYS.has(key)) {
+        newConfig[key] = body[key];
+      }
     }
 
     // Preserve existing api_key if not provided

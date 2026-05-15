@@ -2,9 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AppConfig, ProviderConfig } from '../../types.js';
 import { writeConfig } from '../../config/writer.js';
 import { validateBaseUrl } from '../../proxy/validate.js';
-import path from 'path';
-
-const CONFIG_PATH = process.env.CONFIG_PATH || path.resolve(process.cwd(), 'config.yaml');
+import { CONFIG_PATH } from '../../lib/constants.js';
 
 export function registerProviderRoutes(app: FastifyInstance, config: AppConfig): void {
   app.get('/api/providers', async (_request, reply) => {

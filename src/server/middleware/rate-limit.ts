@@ -5,10 +5,6 @@ interface RateLimitEntry {
   resetAt: number;
 }
 
-export function resetRateLimitStore(): void {
-  // No-op kept for API compatibility; each limiter instance manages its own store
-}
-
 export function rateLimiter(maxRequests: number, windowMs: number) {
   const store = new Map<string, RateLimitEntry>();
 

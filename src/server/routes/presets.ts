@@ -2,9 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AppConfig } from '../../types.js';
 import { presets } from '../../config/presets.js';
 import { writeConfig } from '../../config/writer.js';
-import path from 'path';
-
-const CONFIG_PATH = process.env.CONFIG_PATH || path.resolve(process.cwd(), 'config.yaml');
+import { CONFIG_PATH } from '../../lib/constants.js';
 
 export function registerPresetRoutes(app: FastifyInstance, config: AppConfig): void {
   app.get('/api/presets', async (_request, reply) => {
