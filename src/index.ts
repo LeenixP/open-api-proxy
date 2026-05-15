@@ -106,18 +106,39 @@ async function main(): Promise<void> {
   console.log(`open-api-proxy running at http://${host}:${port}`);
 
   // Graceful shutdown
+  let isShuttingDown = false;
+
   const shutdown = async (signal: string) => {
-    console.log(`\nReceived ${signal}, shutting down gracefully...`);
+    if (isShuttingDown) {
+      // Second signal received - force exit
+      console.log(`\nReceived second ${signal}, forcing exit...`);
+      process.exit(1);
+    }
+    isShuttingDown = true;
+    console.log(`\nReceived ${signal}, shutting down gracefully... (Ctrl+C again to force)`);
+
+    // Force exit after 5 seconds if graceful shutdown hangs
+    const forceTimer = setTimeout(() => {
+      console.log('Graceful shutdown timed out, forcing exit...');
+      process.exit(1);
+    }, 5000);
+    forceTimer.unref();
+
     try {
       await app.close();
+      clearTimeout(forceTimer);
       console.log('Server closed');
       process.exit(0);
     } catch (err) {
+      clearTimeout(forceTimer);
       console.error('Error during shutdown:', err);
       process.exit(1);
     }
   };
 
+  // Remove any existing handlers to avoid duplicates
+  process.removeAllListeners('SIGINT');
+  process.removeAllListeners('SIGTERM');
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
